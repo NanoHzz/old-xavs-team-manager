@@ -70,15 +70,23 @@ export default function TeamSheetPage() {
       } else {
         const allRounds = data || []
         setRounds(allRounds)
-        // Default to nearest upcoming round, or most recent past round
-        if (allRounds.length > 0) {
-          const now = new Date().getTime()
-          const upcoming = allRounds.find(r => r.date_time && new Date(r.date_time).getTime() >= now)
-          if (upcoming) {
-            setSelectedRoundId(upcoming.id)
+        // Default to nearest upcoming round
+        if (allRounds.length > 0 && !selectedRoundId) {
+          // 1. Try to find first round with status 'upcoming' or 'team_selected'
+          const activeRound = allRounds.find(r => r.status === 'upcoming' || r.status === 'team_selected')
+          if (activeRound) {
+            setSelectedRoundId(activeRound.id)
           } else {
-            // No upcoming rounds — pick the most recent past round
-            setSelectedRoundId(allRounds[allRounds.length - 1].id)
+            // 2. Try date-based: first round with a future date_time
+            const now = new Date().getTime()
+            const upcoming = allRounds.find(r => r.date_time && new Date(r.date_time).getTime() >= now)
+            if (upcoming) {
+              setSelectedRoundId(upcoming.id)
+            } else {
+              // 3. Fallback: most recent completed round, or first round
+              const completed = [...allRounds].reverse().find(r => r.status === 'completed')
+              setSelectedRoundId(completed ? completed.id : allRounds[0].id)
+            }
           }
         }
       }

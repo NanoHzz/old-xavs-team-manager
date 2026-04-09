@@ -91,9 +91,29 @@ const PRIMARY_POSITION_ZONES: Record<string, { x: number; y: number }> = {
   'half_forward_flank': { x: 22, y: 68 },
 }
 
-// Match position name to a zone
-function getPositionCoords(positionName: string | undefined, primaryPosition: string | null | undefined): { x: number; y: number } {
-  // Try exact match on position name first
+// Positions that come in pairs — left and right coordinates
+const PAIRED_POSITIONS: Record<string, { left: { x: number; y: number }; right: { x: number; y: number } }> = {
+  'Back Pocket':        { left: { x: 25, y: 18 }, right: { x: 75, y: 18 } },
+  'Half Back Flank':    { left: { x: 22, y: 32 }, right: { x: 78, y: 32 } },
+  'Wing':               { left: { x: 12, y: 50 }, right: { x: 88, y: 50 } },
+  'Half Forward Flank': { left: { x: 22, y: 68 }, right: { x: 78, y: 68 } },
+  'Forward Pocket':     { left: { x: 25, y: 82 }, right: { x: 75, y: 82 } },
+}
+
+// Match position name to a zone, tracking instance count for paired positions
+function getPositionCoords(
+  positionName: string | undefined,
+  primaryPosition: string | null | undefined,
+  positionInstanceCount: Record<string, number>,
+): { x: number; y: number } {
+  // Check paired positions first (these share the same name in the DB)
+  if (positionName && PAIRED_POSITIONS[positionName]) {
+    const count = positionInstanceCount[positionName] || 0
+    positionInstanceCount[positionName] = count + 1
+    return count === 0 ? PAIRED_POSITIONS[positionName].left : PAIRED_POSITIONS[positionName].right
+  }
+
+  // Try exact match on position name
   if (positionName && POSITION_ZONES[positionName]) return POSITION_ZONES[positionName]
 
   // Fuzzy match on position name
@@ -126,12 +146,14 @@ function getPositionCoords(positionName: string | undefined, primaryPosition: st
 
 export function AflOval({ players, className = '' }: AflOvalProps) {
   const positionedPlayers = useMemo(() => {
+    const positionInstanceCount: Record<string, number> = {}
     const zoneCount: Record<string, number> = {}
 
     return players
       .filter(p => p.selectionType === 'on_field')
       .map(player => {
-        const coords = getPositionCoords(player.positionName, player.primaryPosition)
+        const coords = getPositionCoords(player.positionName, player.primaryPosition, positionInstanceCount)
+        // For non-paired positions that end up at the same exact spot, offset slightly
         const key = `${coords.x}-${coords.y}`
         const count = zoneCount[key] || 0
         zoneCount[key] = count + 1
