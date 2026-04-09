@@ -14,26 +14,25 @@ interface AflOvalProps {
 }
 
 // Map position categories to approximate zones on the oval
-// AFL ground has: Full Back, Back Pocket, Centre Half Back, Half Back Flank,
-// Wing, Centre, Half Forward Flank, Centre Half Forward, Forward Pocket, Full Forward, Ruck, Ruck Rover, Rover
+// Layout: Defence at top (kicking out), Forward at bottom (kicking in)
 const POSITION_ZONES: Record<string, { x: number; y: number }> = {
-  // Defence (bottom of oval)
-  'Full Back': { x: 50, y: 88 },
-  'FB': { x: 50, y: 88 },
-  'Back Pocket (L)': { x: 25, y: 82 },
-  'BPL': { x: 25, y: 82 },
-  'Back Pocket (R)': { x: 75, y: 82 },
-  'BPR': { x: 75, y: 82 },
-  'Back Pocket': { x: 25, y: 82 },
-  'BP': { x: 25, y: 82 },
-  'Centre Half Back': { x: 50, y: 72 },
-  'CHB': { x: 50, y: 72 },
-  'Half Back Flank (L)': { x: 22, y: 68 },
-  'HBFL': { x: 22, y: 68 },
-  'Half Back Flank (R)': { x: 78, y: 68 },
-  'HBFR': { x: 78, y: 68 },
-  'Half Back Flank': { x: 22, y: 68 },
-  'HBF': { x: 22, y: 68 },
+  // Defence (top of oval — our team defending this end)
+  'Full Back': { x: 50, y: 12 },
+  'FB': { x: 50, y: 12 },
+  'Back Pocket (L)': { x: 25, y: 18 },
+  'BPL': { x: 25, y: 18 },
+  'Back Pocket (R)': { x: 75, y: 18 },
+  'BPR': { x: 75, y: 18 },
+  'Back Pocket': { x: 25, y: 18 },
+  'BP': { x: 25, y: 18 },
+  'Centre Half Back': { x: 50, y: 28 },
+  'CHB': { x: 50, y: 28 },
+  'Half Back Flank (L)': { x: 22, y: 32 },
+  'HBFL': { x: 22, y: 32 },
+  'Half Back Flank (R)': { x: 78, y: 32 },
+  'HBFR': { x: 78, y: 32 },
+  'Half Back Flank': { x: 22, y: 32 },
+  'HBF': { x: 22, y: 32 },
 
   // Midfield (middle of oval)
   'Wing (L)': { x: 12, y: 50 },
@@ -44,31 +43,31 @@ const POSITION_ZONES: Record<string, { x: number; y: number }> = {
   'W': { x: 12, y: 50 },
   'Centre': { x: 50, y: 50 },
   'C': { x: 50, y: 50 },
-  'Ruck': { x: 50, y: 45 },
-  'R': { x: 50, y: 45 },
-  'RK': { x: 50, y: 45 },
+  'Ruck': { x: 50, y: 55 },
+  'R': { x: 50, y: 55 },
+  'RK': { x: 50, y: 55 },
   'Ruck Rover': { x: 42, y: 50 },
   'RR': { x: 42, y: 50 },
   'Rover': { x: 58, y: 50 },
   'ROV': { x: 58, y: 50 },
 
-  // Forward (top of oval)
-  'Half Forward Flank (L)': { x: 22, y: 32 },
-  'HFFL': { x: 22, y: 32 },
-  'Half Forward Flank (R)': { x: 78, y: 32 },
-  'HFFR': { x: 78, y: 32 },
-  'Half Forward Flank': { x: 22, y: 32 },
-  'HFF': { x: 22, y: 32 },
-  'Centre Half Forward': { x: 50, y: 28 },
-  'CHF': { x: 50, y: 28 },
-  'Forward Pocket (L)': { x: 25, y: 18 },
-  'FPL': { x: 25, y: 18 },
-  'Forward Pocket (R)': { x: 75, y: 18 },
-  'FPR': { x: 75, y: 18 },
-  'Forward Pocket': { x: 25, y: 18 },
-  'FP': { x: 25, y: 18 },
-  'Full Forward': { x: 50, y: 12 },
-  'FF': { x: 50, y: 12 },
+  // Forward (bottom of oval — our team attacking this end)
+  'Half Forward Flank (L)': { x: 22, y: 68 },
+  'HFFL': { x: 22, y: 68 },
+  'Half Forward Flank (R)': { x: 78, y: 68 },
+  'HFFR': { x: 78, y: 68 },
+  'Half Forward Flank': { x: 22, y: 68 },
+  'HFF': { x: 22, y: 68 },
+  'Centre Half Forward': { x: 50, y: 72 },
+  'CHF': { x: 50, y: 72 },
+  'Forward Pocket (L)': { x: 25, y: 82 },
+  'FPL': { x: 25, y: 82 },
+  'Forward Pocket (R)': { x: 75, y: 82 },
+  'FPR': { x: 75, y: 82 },
+  'Forward Pocket': { x: 25, y: 82 },
+  'FP': { x: 25, y: 82 },
+  'Full Forward': { x: 50, y: 88 },
+  'FF': { x: 50, y: 88 },
 }
 
 // Fuzzy match position name to a zone
@@ -79,18 +78,18 @@ function getPositionCoords(positionName: string): { x: number; y: number } {
   const lower = positionName.toLowerCase()
 
   // Fuzzy matching for common patterns
-  if (lower.includes('full back')) return { x: 50, y: 88 }
-  if (lower.includes('full forward')) return { x: 50, y: 12 }
-  if (lower.includes('back pocket')) return { x: 25, y: 82 }
-  if (lower.includes('forward pocket')) return { x: 25, y: 18 }
-  if (lower.includes('centre half back') || lower.includes('center half back')) return { x: 50, y: 72 }
-  if (lower.includes('centre half forward') || lower.includes('center half forward')) return { x: 50, y: 28 }
-  if (lower.includes('half back')) return { x: 22, y: 68 }
-  if (lower.includes('half forward')) return { x: 22, y: 32 }
+  if (lower.includes('full back')) return { x: 50, y: 12 }
+  if (lower.includes('full forward')) return { x: 50, y: 88 }
+  if (lower.includes('back pocket')) return { x: 25, y: 18 }
+  if (lower.includes('forward pocket')) return { x: 25, y: 82 }
+  if (lower.includes('centre half back') || lower.includes('center half back')) return { x: 50, y: 28 }
+  if (lower.includes('centre half forward') || lower.includes('center half forward')) return { x: 50, y: 72 }
+  if (lower.includes('half back')) return { x: 22, y: 32 }
+  if (lower.includes('half forward')) return { x: 22, y: 68 }
   if (lower.includes('wing')) return { x: 12, y: 50 }
   if (lower.includes('ruck rover')) return { x: 42, y: 50 }
   if (lower.includes('rover')) return { x: 58, y: 50 }
-  if (lower.includes('ruck')) return { x: 50, y: 45 }
+  if (lower.includes('ruck')) return { x: 50, y: 55 }
   if (lower.includes('centre') || lower.includes('center')) return { x: 50, y: 50 }
   if (lower.includes('interchange') || lower.includes('bench')) return { x: 50, y: 96 }
 
@@ -151,9 +150,9 @@ export function AflOval({ players, className = '' }: AflOvalProps) {
           <path d="M 50 300 Q 150 260 250 300" fill="none" stroke="white" strokeWidth="1" strokeDasharray="4 4" />
 
           {/* Goal squares */}
-          {/* Forward end */}
+          {/* Defence end (top) */}
           <rect x="125" y="18" width="50" height="25" fill="none" stroke="white" strokeWidth="1.5" />
-          {/* Back end */}
+          {/* Forward end (bottom) */}
           <rect x="125" y="377" width="50" height="25" fill="none" stroke="white" strokeWidth="1.5" />
 
           {/* Goal posts (small marks) */}
@@ -169,9 +168,9 @@ export function AflOval({ players, className = '' }: AflOvalProps) {
           <line x1="190" y1="398" x2="190" y2="402" stroke="white" strokeWidth="1.5" />
 
           {/* Zone labels */}
-          <text x="150" y="55" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">FORWARD</text>
+          <text x="150" y="55" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">DEFENCE</text>
           <text x="150" y="215" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">MIDFIELD</text>
-          <text x="150" y="375" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">DEFENCE</text>
+          <text x="150" y="375" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">FORWARD</text>
         </svg>
 
         {/* Player dots */}
