@@ -12,6 +12,7 @@ interface OvalPlayer {
 interface AflOvalProps {
   players: OvalPlayer[]
   className?: string
+  compact?: boolean
 }
 
 // Map position names to zones on the oval
@@ -144,7 +145,7 @@ function getPositionCoords(
   return { x: 50, y: 50 }
 }
 
-export function AflOval({ players, className = '' }: AflOvalProps) {
+export function AflOval({ players, className = '', compact = false }: AflOvalProps) {
   const positionedPlayers = useMemo(() => {
     const positionInstanceCount: Record<string, number> = {}
     const zoneCount: Record<string, number> = {}
@@ -170,10 +171,16 @@ export function AflOval({ players, className = '' }: AflOvalProps) {
 
   const benchPlayers = players.filter(p => p.selectionType !== 'on_field')
 
+  const dotSize = compact ? 'w-6 h-6' : 'w-8 h-8'
+  const dotText = compact ? 'text-[8px]' : 'text-xs'
+  const nameText = compact ? 'text-[7px]' : 'text-[9px]'
+  const nameMaxW = compact ? 'max-w-[50px]' : 'max-w-[60px]'
+  const paddingBottom = compact ? '90%' : '115%'
+
   return (
     <div className={className}>
       {/* The Oval */}
-      <div className="relative w-full" style={{ paddingBottom: '115%' }}>
+      <div className="relative w-full" style={{ paddingBottom }}>
         <svg
           viewBox="0 0 300 345"
           className="absolute inset-0 w-full h-full"
@@ -213,10 +220,14 @@ export function AflOval({ players, className = '' }: AflOvalProps) {
           <line x1="110" y1="329" x2="110" y2="333" stroke="white" strokeWidth="1.5" />
           <line x1="190" y1="329" x2="190" y2="333" stroke="white" strokeWidth="1.5" />
 
-          {/* Zone labels */}
-          <text x="150" y="52" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">DEFENCE</text>
-          <text x="150" y="176" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">MIDFIELD</text>
-          <text x="150" y="305" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">FORWARD</text>
+          {!compact && (
+            <>
+              {/* Zone labels */}
+              <text x="150" y="52" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">DEFENCE</text>
+              <text x="150" y="176" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">MIDFIELD</text>
+              <text x="150" y="305" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">FORWARD</text>
+            </>
+          )}
         </svg>
 
         {/* Player dots */}
@@ -231,7 +242,7 @@ export function AflOval({ players, className = '' }: AflOvalProps) {
             }}
           >
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-lg border-2 ${
+              className={`${dotSize} rounded-full flex items-center justify-center ${dotText} font-bold shadow-lg border-2 ${
                 player.isCurrentUser
                   ? 'bg-yellow-400 border-yellow-200 text-gray-900'
                   : 'bg-white border-gray-200 text-gray-900'
@@ -239,7 +250,7 @@ export function AflOval({ players, className = '' }: AflOvalProps) {
             >
               {player.jerseyNumber ? `#${player.jerseyNumber}` : player.name.charAt(0)}
             </div>
-            <span className="text-white text-[9px] font-medium mt-0.5 bg-black bg-opacity-50 px-1 rounded whitespace-nowrap max-w-[60px] truncate">
+            <span className={`text-white ${nameText} font-medium mt-0.5 bg-black bg-opacity-50 px-1 rounded whitespace-nowrap ${nameMaxW} truncate`}>
               {player.name.split(' ').pop()}
             </span>
           </div>

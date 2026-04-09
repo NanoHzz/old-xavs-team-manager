@@ -8,6 +8,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { AflOval } from '../../components/ui/AflOval'
 import { Calendar, AlertCircle, Plus, Send, X, MessageCircle, Users } from 'lucide-react'
 import type { Round, PlayerAvailability, Position, Member } from '../../types'
 
@@ -391,40 +392,23 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* Draft Team based on availability */}
+            {/* Draft Team oval based on availability */}
             {draftPlayers.length > 0 && (
               <div className="border-t pt-3 mt-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Users className="w-4 h-4 text-gray-500" />
                   <p className="text-sm font-semibold text-gray-700">Draft Team ({draftPlayers.length} available)</p>
                 </div>
-                <div className="space-y-1.5">
-                  {draftPlayers.map(dp => (
-                    <div
-                      key={dp.member.id}
-                      className={`flex items-center justify-between p-2 rounded text-sm ${
-                        dp.member.id === currentMember?.id ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {dp.member.jersey_number && (
-                          <span className="text-xs bg-gray-300 text-gray-900 px-1.5 py-0.5 rounded font-bold">
-                            #{dp.member.jersey_number}
-                          </span>
-                        )}
-                        <span>{dp.member.display_name || dp.member.guest_name || 'Unknown'}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {dp.primaryPosition && (
-                          <span className="text-xs text-gray-500">{dp.primaryPosition}</span>
-                        )}
-                        <Badge variant={dp.status === 'available' ? 'success' : 'warning'}>
-                          {dp.status === 'available' ? 'In' : 'Maybe'}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <AflOval
+                  compact
+                  players={draftPlayers.map(dp => ({
+                    name: dp.member.display_name || dp.member.guest_name || 'Unknown',
+                    jerseyNumber: dp.member.jersey_number,
+                    primaryPosition: dp.primaryPosition || null,
+                    isCurrentUser: dp.member.id === currentMember?.id,
+                    selectionType: 'on_field',
+                  }))}
+                />
               </div>
             )}
           </div>

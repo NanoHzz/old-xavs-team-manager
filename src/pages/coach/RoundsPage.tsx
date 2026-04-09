@@ -6,6 +6,7 @@ import { Card } from '../../components/ui/Card'
 import { Input } from '../../components/ui/Input'
 import type { Season, Round } from '../../types'
 import { format, addDays, parse, isBefore } from 'date-fns'
+import { localDateTimeToISO, isoToLocalDateTime } from '../../lib/utils'
 import { ChevronDown, ChevronUp, Plus, Trash2, Edit2, X } from 'lucide-react'
 
 interface RoundWithStatus extends Round {
@@ -113,7 +114,7 @@ export default function RoundsPage() {
       const newRounds = generatedRounds.map(r => ({
         season_id: activeSeason.id,
         round_number: r.round_number,
-        date_time: r.date_time,
+        date_time: localDateTimeToISO(r.date_time),
         opposition: r.opposition,
         venue: r.venue,
         is_bye: r.is_bye,
@@ -230,14 +231,14 @@ export default function RoundsPage() {
 
     setSaving(true)
     try {
-      const dateTime = `${roundForm.matchDate}${roundForm.matchTime ? `T${roundForm.matchTime}` : 'T00:00:00'}`
+      const naiveDateTime = `${roundForm.matchDate}${roundForm.matchTime ? `T${roundForm.matchTime}` : 'T00:00:00'}`
 
       const { data, error } = await supabase
         .from('rounds')
         .insert({
           season_id: activeSeason.id,
           round_number: parseInt(roundForm.roundNumber),
-          date_time: dateTime,
+          date_time: localDateTimeToISO(naiveDateTime),
           opposition: roundForm.opposition || null,
           venue: roundForm.venue || null,
         })
@@ -267,7 +268,7 @@ export default function RoundsPage() {
           round_number: editingRound.round_number,
           opposition: editingRound.opposition,
           venue: editingRound.venue,
-          date_time: editingRound.date_time,
+          date_time: editingRound.date_time ? localDateTimeToISO(editingRound.date_time) : null,
           is_bye: editingRound.is_bye || false,
         })
         .eq('id', round.id)
@@ -656,7 +657,7 @@ export default function RoundsPage() {
                           <Input
                             placeholder="Date & Time"
                             type="datetime-local"
-                            value={round.date_time?.replace('Z', '').split('+')[0] || ''}
+                            value={round.date_time ? isoToLocalDateTime(round.date_time) : ''}
                             onChange={e => {
                               const newRounds = [...generatedRounds]
                               newRounds[idx].date_time = e.target.value
@@ -813,7 +814,7 @@ export default function RoundsPage() {
                             <Input
                               label="Date & Time"
                               type="datetime-local"
-                              value={editingRound.date_time?.replace('Z', '').split('+')[0] || ''}
+                              value={editingRound.date_time ? isoToLocalDateTime(editingRound.date_time) : ''}
                               onChange={e =>
                                 setEditingRound({
                                   ...editingRound,
