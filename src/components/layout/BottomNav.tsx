@@ -49,9 +49,9 @@ export function BottomNav() {
   // All available tabs based on role
   const playerTabs: Tab[] = [
     { path: '/', label: 'Home', icon: Home },
-    { path: '/squad', label: 'Squad', icon: Users },
-    { path: '/availability', label: 'Availability', icon: Calendar },
     { path: '/team-sheet', label: 'Team Sheet', icon: ClipboardList },
+    { path: '/availability', label: 'Availability', icon: Calendar },
+    { path: '/squad', label: 'Squad', icon: Users },
     { path: '/preferences', label: 'Preferences', icon: Sliders },
     { path: '/profile', label: 'Profile', icon: User },
   ]
