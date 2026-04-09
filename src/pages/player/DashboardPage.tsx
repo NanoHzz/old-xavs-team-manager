@@ -5,10 +5,10 @@ import { useTeam } from '../../contexts/TeamContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
-import { Button as _Button } from '../../components/ui/Button'
+import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { Calendar, AlertCircle } from 'lucide-react'
+import { Calendar, AlertCircle, Plus, Send, X } from 'lucide-react'
 import type { Round, PlayerAvailability, Position } from '../../types'
 
 interface NextGame {
@@ -27,7 +27,7 @@ interface RecentNotification {
 }
 
 export default function DashboardPage() {
-  const { currentTeam, currentMember } = useTeam()
+  const { currentTeam, currentMember, members } = useTeam()
   const { user } = useAuth()
 
   const [nextGame, setNextGame] = useState<NextGame | null>(null)
@@ -37,134 +37,188 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [updatingAvailability, setUpdatingAvailability] = useState(false)
 
+  // Coach message state
+  const [showMessageForm, setShowMessageForm] = useState(false)
+  const [messageTitle, setMessageTitle] = useState('')
+  const [messageBody, setMessageBody] = useState('')
+  const [sendingMessage, setSendingMessage] = useState(false)
+
+  const isCoachOrAdmin = currentMember?.role === 'coach' || currentMember?.role === 'admin'
+
   useEffect(() => {
     if (!currentTeam || !currentMember || !user) {
       setLoading(false)
       return
     }
 
-    const fetchDashboardData = async () => {
-      setLoading(true)
-      try {
-        // Fetch active seasons for this team
-        const { data: seasonsData } = await supabase
-          .from('seasons')
-          .select('id')
-          .eq('team_id', currentTeam.id)
-          .eq('is_active', true)
-
-        const seasonIds = seasonsData?.map(s => s.id) || []
-
-        // Fetch next upcoming round
-        const { data: roundsData, error: roundsError } = seasonIds.length > 0
-          ? await supabase
-              .from('rounds')
-              .select('*')
-              .in('season_id', seasonIds)
-              .gte('date_time', new Date().toISOString())
-              .order('date_time', { ascending: true })
-              .limit(1)
-          : { data: [], error: null }
-
-        if (roundsError) throw roundsError
-
-        if (roundsData && roundsData.length > 0) {
-          const nextRound = roundsData[0]
-
-          // Fetch player availability for next round
-          const { data: availData } = await supabase
-            .from('player_availability')
-            .select('*')
-            .eq('member_id', currentMember.id)
-            .eq('round_id', nextRound.id)
-            .single()
-
-          // Fetch selection info
-          let selectionStatus = 'pending'
-          let position: Position | undefined
-
-          const { data: teamSelectionData } = await supabase
-            .from('team_selections')
-            .select('id')
-            .eq('round_id', nextRound.id)
-            .single()
-
-          if (teamSelectionData) {
-            const { data: selectionPlayersData } = await supabase
-              .from('selection_players')
-              .select('selection_type, positions(*)')
-              .eq('team_selection_id', teamSelectionData.id)
-              .eq('member_id', currentMember.id)
-              .single()
-
-            if (selectionPlayersData) {
-              selectionStatus = selectionPlayersData.selection_type === 'on_field' ? 'selected' : selectionPlayersData.selection_type
-              position = (selectionPlayersData.positions as unknown as Position[])?.[0]
-            }
-          }
-
-          setNextGame({
-            round: nextRound,
-            availability: availData || undefined,
-            selectionStatus,
-            position,
-          })
-
-          if (availData) {
-            setAvailability(availData.status)
-          }
-        }
-
-        // Fetch recent notifications
-        const { data: notificationsData } = await supabase
-          .from('notifications')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(5)
-
-        setNotifications(notificationsData || [])
-
-        // Count games played this season
-        const { data: selectedData, error: selectedError } = await supabase
-          .from('selection_players')
-          .select('team_selection_id')
-          .eq('member_id', currentMember.id)
-
-        if (!selectedError && selectedData) {
-          const teamSelectionIds = selectedData.map(s => s.team_selection_id)
-          if (teamSelectionIds.length > 0) {
-            const { count } = await supabase
-              .from('team_selections')
-              .select('*', { count: 'exact' })
-              .in('id', teamSelectionIds)
-
-            setGamesPlayed(count || 0)
-          }
-        }
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchDashboardData()
   }, [currentTeam, currentMember, user])
+
+  const fetchDashboardData = async () => {
+    if (!currentTeam || !currentMember || !user) return
+    setLoading(true)
+    try {
+      // Fetch active seasons for this team
+      const { data: seasonsData } = await supabase
+        .from('seasons')
+        .select('id')
+        .eq('team_id', currentTeam.id)
+        .eq('is_active', true)
+
+      const seasonIds = seasonsData?.map(s => s.id) || []
+
+      // Fetch next upcoming round
+      const { data: roundsData, error: roundsError } = seasonIds.length > 0
+        ? await supabase
+            .from('rounds')
+            .select('*')
+            .in('season_id', seasonIds)
+            .gte('date_time', new Date().toISOString())
+            .order('date_time', { ascending: true })
+            .limit(1)
+        : { data: [], error: null }
+
+      if (roundsError) throw roundsError
+
+      if (roundsData && roundsData.length > 0) {
+        const nextRound = roundsData[0]
+
+        // Fetch player availability for next round
+        const { data: availData } = await supabase
+          .from('player_availability')
+          .select('*')
+          .eq('member_id', currentMember.id)
+          .eq('round_id', nextRound.id)
+          .single()
+
+        // Fetch selection info
+        let selectionStatus = 'pending'
+        let position: Position | undefined
+
+        const { data: teamSelectionData } = await supabase
+          .from('team_selections')
+          .select('id')
+          .eq('round_id', nextRound.id)
+          .single()
+
+        if (teamSelectionData) {
+          const { data: selectionPlayersData } = await supabase
+            .from('selection_players')
+            .select('selection_type, positions(*)')
+            .eq('team_selection_id', teamSelectionData.id)
+            .eq('member_id', currentMember.id)
+            .single()
+
+          if (selectionPlayersData) {
+            selectionStatus = selectionPlayersData.selection_type === 'on_field' ? 'selected' : selectionPlayersData.selection_type
+            position = (selectionPlayersData.positions as unknown as Position[])?.[0]
+          }
+        }
+
+        setNextGame({
+          round: nextRound,
+          availability: availData || undefined,
+          selectionStatus,
+          position,
+        })
+
+        if (availData) {
+          setAvailability(availData.status)
+        }
+      }
+
+      // Fetch recent notifications
+      const { data: notificationsData } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5)
+
+      setNotifications(notificationsData || [])
+
+      // Count games played this season
+      const { data: selectedData, error: selectedError } = await supabase
+        .from('selection_players')
+        .select('team_selection_id')
+        .eq('member_id', currentMember.id)
+
+      if (!selectedError && selectedData) {
+        const teamSelectionIds = selectedData.map(s => s.team_selection_id)
+        if (teamSelectionIds.length > 0) {
+          const { count } = await supabase
+            .from('team_selections')
+            .select('*', { count: 'exact' })
+            .in('id', teamSelectionIds)
+
+          setGamesPlayed(count || 0)
+        }
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleAvailabilityChange = async (status: 'available' | 'unavailable' | 'maybe') => {
     if (!currentMember || !nextGame) return
 
     setUpdatingAvailability(true)
     try {
-      const { error } = await supabase.from('player_availability').upsert({
-        member_id: currentMember.id,
-        round_id: nextGame.round.id,
-        status: status,
-      })
+      const { error } = await supabase.from('player_availability').upsert(
+        {
+          member_id: currentMember.id,
+          round_id: nextGame.round.id,
+          status: status,
+        },
+        { onConflict: 'member_id,round_id' }
+      )
 
       if (error) throw error
       setAvailability(status)
     } finally {
       setUpdatingAvailability(false)
+    }
+  }
+
+  const handleSendMessage = async () => {
+    if (!currentTeam || !currentMember || !messageTitle.trim()) return
+
+    setSendingMessage(true)
+    try {
+      // Get all team members' user IDs (excluding the sender)
+      const recipients = members.filter(m => m.user_id !== currentMember.user_id && m.status === 'active')
+
+      if (recipients.length === 0) {
+        alert('No team members to notify')
+        return
+      }
+
+      const notificationInserts = recipients.map(m => ({
+        user_id: m.user_id,
+        type: 'coach_message',
+        title: messageTitle.trim(),
+        body: messageBody.trim() || null,
+        read: false,
+      }))
+
+      const { error } = await supabase
+        .from('notifications')
+        .insert(notificationInserts)
+
+      if (error) throw error
+
+      // Reset form
+      setMessageTitle('')
+      setMessageBody('')
+      setShowMessageForm(false)
+
+      // Refresh notifications (the coach will also see their own if they want)
+      await fetchDashboardData()
+    } catch (err) {
+      console.error('Error sending message:', err)
+      alert('Failed to send message')
+    } finally {
+      setSendingMessage(false)
     }
   }
 
@@ -296,8 +350,56 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      {/* Recent Notifications */}
-      <Card title="Recent Notifications">
+      {/* Recent Notifications with Coach Message Button */}
+      <Card
+        title={
+          <div className="flex items-center justify-between w-full">
+            <span>Recent Notifications</span>
+            {isCoachOrAdmin && (
+              <button
+                onClick={() => setShowMessageForm(!showMessageForm)}
+                className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                title="Send message to team"
+              >
+                {showMessageForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              </button>
+            )}
+          </div>
+        }
+      >
+        {/* Coach Message Form */}
+        {showMessageForm && isCoachOrAdmin && (
+          <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-xs font-semibold text-blue-700 mb-2">Send message to all players</p>
+            <input
+              type="text"
+              placeholder="Message title..."
+              value={messageTitle}
+              onChange={(e) => setMessageTitle(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              maxLength={100}
+            />
+            <textarea
+              placeholder="Message body (optional)..."
+              value={messageBody}
+              onChange={(e) => setMessageBody(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              rows={3}
+              maxLength={500}
+            />
+            <Button
+              onClick={handleSendMessage}
+              variant="primary"
+              fullWidth
+              loading={sendingMessage}
+              disabled={!messageTitle.trim()}
+            >
+              <Send className="w-4 h-4 mr-1" />
+              Send to Team ({members.filter(m => m.user_id !== currentMember?.user_id && m.status === 'active').length} players)
+            </Button>
+          </div>
+        )}
+
         {notifications.length > 0 ? (
           <div className="space-y-3">
             {notifications.map(notif => (
@@ -307,7 +409,9 @@ export default function DashboardPage() {
                     <p className="font-medium text-sm">{notif.title}</p>
                     <p className="text-gray-600 text-sm">{notif.body}</p>
                   </div>
-                  <Badge variant="default">{notif.type}</Badge>
+                  <Badge variant={notif.type === 'coach_message' ? 'info' : 'default'}>
+                    {notif.type === 'coach_message' ? 'Coach' : notif.type}
+                  </Badge>
                 </div>
                 <p className="text-xs text-gray-400 mt-1">
                   {formatDate(notif.created_at)}

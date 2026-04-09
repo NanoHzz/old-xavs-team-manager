@@ -5,7 +5,8 @@ import { useTeam } from '../../contexts/TeamContext'
 import { Card } from '../../components/ui/Card'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { Users } from 'lucide-react'
+import { AflOval } from '../../components/ui/AflOval'
+import { Users, LayoutGrid, Map } from 'lucide-react'
 import type { Round, TeamSelection, SelectionPlayer, Position, GameDayRole } from '../../types'
 
 interface TeamSheetPlayer extends SelectionPlayer {
@@ -26,6 +27,8 @@ interface TeamSheetData {
   currentPlayerPosition?: string
 }
 
+type ViewMode = 'oval' | 'list'
+
 export default function TeamSheetPage() {
   const { currentTeam, currentMember, members } = useTeam()
 
@@ -33,6 +36,7 @@ export default function TeamSheetPage() {
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null)
   const [teamSheet, setTeamSheet] = useState<TeamSheetData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [viewMode, setViewMode] = useState<ViewMode>('oval')
 
   // Fetch all rounds
   useEffect(() => {
@@ -210,9 +214,34 @@ export default function TeamSheetPage() {
 
   return (
     <div className="p-4 pb-20 space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Team Sheet</h1>
-        <p className="text-gray-500 text-sm mt-1">View the selected team for your match</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Team Sheet</h1>
+          <p className="text-gray-500 text-sm mt-1">View the selected team for your match</p>
+        </div>
+        {/* View toggle */}
+        {teamSheet && (
+          <div className="flex bg-gray-100 rounded-lg p-0.5">
+            <button
+              onClick={() => setViewMode('oval')}
+              className={`p-2 rounded-md transition-colors ${
+                viewMode === 'oval' ? 'bg-white shadow text-blue-600' : 'text-gray-500'
+              }`}
+              title="Oval view"
+            >
+              <Map className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-md transition-colors ${
+                viewMode === 'list' ? 'bg-white shadow text-blue-600' : 'text-gray-500'
+              }`}
+              title="List view"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Round Selector */}
@@ -263,61 +292,83 @@ export default function TeamSheetPage() {
             </div>
           </Card>
 
-          {/* Field Players */}
-          <Card title="On Field">
-            <div className="space-y-3">
-              {getFieldPlayers().length > 0 ? (
-                Object.entries(groupPlayersByPosition(getFieldPlayers())).map(([position, players]) => (
-                  <div key={position}>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2">{position}</h4>
-                    <div className="space-y-1 ml-2">
-                      {players.map(player => (
-                        <div
-                          key={player.id}
-                          className={`p-2 rounded ${
-                            player.member_id === currentMember?.id ? 'bg-blue-50 border border-blue-300' : 'bg-gray-50'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm">{player.memberName}</span>
-                            {player.jerseyNumber && (
-                              <span className="text-xs bg-gray-300 text-gray-900 px-2 py-1 rounded font-bold">
-                                #{player.jerseyNumber}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-500 text-sm">No field players selected</p>
-              )}
-            </div>
-          </Card>
-
-          {/* Bench Players */}
-          {getBenchPlayers().length > 0 && (
-            <Card title="Bench">
-              <div className="space-y-2">
-                {getBenchPlayers().map(player => (
-                  <div
-                    key={player.id}
-                    className={`p-2 rounded flex items-center justify-between ${
-                      player.member_id === currentMember?.id ? 'bg-blue-50 border border-blue-300' : 'bg-gray-50'
-                    }`}
-                  >
-                    <span className="text-sm">{player.memberName}</span>
-                    {player.jerseyNumber && (
-                      <span className="text-xs bg-gray-300 text-gray-900 px-2 py-1 rounded font-bold">
-                        #{player.jerseyNumber}
-                      </span>
-                    )}
-                  </div>
-                ))}
+          {/* Oval View */}
+          {viewMode === 'oval' && (
+            <Card title="Team Positions" padding={false}>
+              <div className="p-2">
+                <AflOval
+                  players={teamSheet.players.map(p => ({
+                    name: p.memberName || 'Unknown',
+                    jerseyNumber: p.jerseyNumber,
+                    positionName: p.positionName,
+                    isCurrentUser: p.member_id === currentMember?.id,
+                    selectionType: p.selection_type,
+                  }))}
+                />
               </div>
             </Card>
+          )}
+
+          {/* List View */}
+          {viewMode === 'list' && (
+            <>
+              {/* Field Players */}
+              <Card title="On Field">
+                <div className="space-y-3">
+                  {getFieldPlayers().length > 0 ? (
+                    Object.entries(groupPlayersByPosition(getFieldPlayers())).map(([position, players]) => (
+                      <div key={position}>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">{position}</h4>
+                        <div className="space-y-1 ml-2">
+                          {players.map(player => (
+                            <div
+                              key={player.id}
+                              className={`p-2 rounded ${
+                                player.member_id === currentMember?.id ? 'bg-blue-50 border border-blue-300' : 'bg-gray-50'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm">{player.memberName}</span>
+                                {player.jerseyNumber && (
+                                  <span className="text-xs bg-gray-300 text-gray-900 px-2 py-1 rounded font-bold">
+                                    #{player.jerseyNumber}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-sm">No field players selected</p>
+                  )}
+                </div>
+              </Card>
+
+              {/* Bench Players */}
+              {getBenchPlayers().length > 0 && (
+                <Card title="Bench">
+                  <div className="space-y-2">
+                    {getBenchPlayers().map(player => (
+                      <div
+                        key={player.id}
+                        className={`p-2 rounded flex items-center justify-between ${
+                          player.member_id === currentMember?.id ? 'bg-blue-50 border border-blue-300' : 'bg-gray-50'
+                        }`}
+                      >
+                        <span className="text-sm">{player.memberName}</span>
+                        {player.jerseyNumber && (
+                          <span className="text-xs bg-gray-300 text-gray-900 px-2 py-1 rounded font-bold">
+                            #{player.jerseyNumber}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </>
           )}
 
           {/* Game Day Roles */}
