@@ -88,11 +88,14 @@ export default function AvailabilityPage() {
 
     setUpdatingRound(roundId)
     try {
-      const { error } = await supabase.from('player_availability').upsert({
-        member_id: currentMember.id,
-        round_id: roundId,
-        status: status,
-      })
+      const { error } = await supabase.from('player_availability').upsert(
+        {
+          member_id: currentMember.id,
+          round_id: roundId,
+          status: status,
+        },
+        { onConflict: 'member_id,round_id' }
+      )
 
       if (error) throw error
 
@@ -130,7 +133,7 @@ export default function AvailabilityPage() {
         status: 'available' as const,
       }))
 
-      const { error } = await supabase.from('player_availability').upsert(upserts)
+      const { error } = await supabase.from('player_availability').upsert(upserts, { onConflict: 'member_id,round_id' })
 
       if (error) throw error
 
