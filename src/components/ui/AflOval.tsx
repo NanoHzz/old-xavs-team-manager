@@ -4,6 +4,7 @@ interface OvalPlayer {
   name: string
   jerseyNumber?: string | null
   positionName?: string
+  primaryPosition?: string | null
   isCurrentUser?: boolean
   selectionType?: string
 }
@@ -13,10 +14,10 @@ interface AflOvalProps {
   className?: string
 }
 
-// Map position categories to approximate zones on the oval
-// Layout: Defence at top (kicking out), Forward at bottom (kicking in)
+// Map position names to zones on the oval
+// Layout: Defence at top, Forward at bottom
 const POSITION_ZONES: Record<string, { x: number; y: number }> = {
-  // Defence (top of oval — our team defending this end)
+  // Defence (top)
   'Full Back': { x: 50, y: 12 },
   'FB': { x: 50, y: 12 },
   'Back Pocket (L)': { x: 25, y: 18 },
@@ -34,7 +35,7 @@ const POSITION_ZONES: Record<string, { x: number; y: number }> = {
   'Half Back Flank': { x: 22, y: 32 },
   'HBF': { x: 22, y: 32 },
 
-  // Midfield (middle of oval)
+  // Midfield (middle)
   'Wing (L)': { x: 12, y: 50 },
   'WL': { x: 12, y: 50 },
   'Wing (R)': { x: 88, y: 50 },
@@ -51,7 +52,7 @@ const POSITION_ZONES: Record<string, { x: number; y: number }> = {
   'Rover': { x: 58, y: 50 },
   'ROV': { x: 58, y: 50 },
 
-  // Forward (bottom of oval — our team attacking this end)
+  // Forward (bottom)
   'Half Forward Flank (L)': { x: 22, y: 68 },
   'HFFL': { x: 22, y: 68 },
   'Half Forward Flank (R)': { x: 78, y: 68 },
@@ -70,48 +71,71 @@ const POSITION_ZONES: Record<string, { x: number; y: number }> = {
   'FF': { x: 50, y: 88 },
 }
 
-// Fuzzy match position name to a zone
-function getPositionCoords(positionName: string): { x: number; y: number } {
-  // Exact match first
-  if (POSITION_ZONES[positionName]) return POSITION_ZONES[positionName]
+// Map member primary_position enum values to oval zones (fallback)
+const PRIMARY_POSITION_ZONES: Record<string, { x: number; y: number }> = {
+  'back_general': { x: 35, y: 22 },
+  'back_pocket': { x: 25, y: 18 },
+  'full_back': { x: 50, y: 12 },
+  'centre_half_back': { x: 50, y: 28 },
+  'half_back_flank': { x: 22, y: 32 },
+  'mid_general': { x: 50, y: 50 },
+  'mid_centre': { x: 50, y: 50 },
+  'mid_wing': { x: 12, y: 50 },
+  'ruck': { x: 50, y: 55 },
+  'ruck_rover': { x: 42, y: 50 },
+  'rover': { x: 58, y: 50 },
+  'fwd_general': { x: 35, y: 78 },
+  'forward_pocket': { x: 25, y: 82 },
+  'full_forward': { x: 50, y: 88 },
+  'centre_half_forward': { x: 50, y: 72 },
+  'half_forward_flank': { x: 22, y: 68 },
+}
 
-  const lower = positionName.toLowerCase()
+// Match position name to a zone
+function getPositionCoords(positionName: string | undefined, primaryPosition: string | null | undefined): { x: number; y: number } {
+  // Try exact match on position name first
+  if (positionName && POSITION_ZONES[positionName]) return POSITION_ZONES[positionName]
 
-  // Fuzzy matching for common patterns
-  if (lower.includes('full back')) return { x: 50, y: 12 }
-  if (lower.includes('full forward')) return { x: 50, y: 88 }
-  if (lower.includes('back pocket')) return { x: 25, y: 18 }
-  if (lower.includes('forward pocket')) return { x: 25, y: 82 }
-  if (lower.includes('centre half back') || lower.includes('center half back')) return { x: 50, y: 28 }
-  if (lower.includes('centre half forward') || lower.includes('center half forward')) return { x: 50, y: 72 }
-  if (lower.includes('half back')) return { x: 22, y: 32 }
-  if (lower.includes('half forward')) return { x: 22, y: 68 }
-  if (lower.includes('wing')) return { x: 12, y: 50 }
-  if (lower.includes('ruck rover')) return { x: 42, y: 50 }
-  if (lower.includes('rover')) return { x: 58, y: 50 }
-  if (lower.includes('ruck')) return { x: 50, y: 55 }
-  if (lower.includes('centre') || lower.includes('center')) return { x: 50, y: 50 }
-  if (lower.includes('interchange') || lower.includes('bench')) return { x: 50, y: 96 }
+  // Fuzzy match on position name
+  if (positionName) {
+    const lower = positionName.toLowerCase()
+    if (lower.includes('full back')) return { x: 50, y: 12 }
+    if (lower.includes('full forward')) return { x: 50, y: 88 }
+    if (lower.includes('back pocket')) return { x: 25, y: 18 }
+    if (lower.includes('forward pocket')) return { x: 25, y: 82 }
+    if (lower.includes('centre half back') || lower.includes('center half back')) return { x: 50, y: 28 }
+    if (lower.includes('centre half forward') || lower.includes('center half forward')) return { x: 50, y: 72 }
+    if (lower.includes('half back')) return { x: 22, y: 32 }
+    if (lower.includes('half forward')) return { x: 22, y: 68 }
+    if (lower.includes('wing')) return { x: 12, y: 50 }
+    if (lower.includes('ruck rover')) return { x: 42, y: 50 }
+    if (lower.includes('rover')) return { x: 58, y: 50 }
+    if (lower.includes('ruck')) return { x: 50, y: 55 }
+    if (lower.includes('centre') || lower.includes('center')) return { x: 50, y: 50 }
+    if (lower.includes('interchange') || lower.includes('bench')) return { x: 50, y: 96 }
+  }
 
-  // Default to centre if unknown
+  // Fallback to member's primary_position enum value
+  if (primaryPosition && PRIMARY_POSITION_ZONES[primaryPosition]) {
+    return PRIMARY_POSITION_ZONES[primaryPosition]
+  }
+
+  // Default to centre if nothing matches
   return { x: 50, y: 50 }
 }
 
 export function AflOval({ players, className = '' }: AflOvalProps) {
-  // Group players by zone and offset duplicates
   const positionedPlayers = useMemo(() => {
     const zoneCount: Record<string, number> = {}
 
     return players
       .filter(p => p.selectionType === 'on_field')
       .map(player => {
-        const pos = player.positionName || 'Unknown'
-        const coords = getPositionCoords(pos)
+        const coords = getPositionCoords(player.positionName, player.primaryPosition)
         const key = `${coords.x}-${coords.y}`
         const count = zoneCount[key] || 0
         zoneCount[key] = count + 1
 
-        // Offset duplicates slightly
         const offsetX = count > 0 ? (count % 2 === 0 ? count * 6 : -count * 6) : 0
 
         return {
@@ -127,50 +151,50 @@ export function AflOval({ players, className = '' }: AflOvalProps) {
   return (
     <div className={className}>
       {/* The Oval */}
-      <div className="relative w-full" style={{ paddingBottom: '140%' }}>
+      <div className="relative w-full" style={{ paddingBottom: '115%' }}>
         <svg
-          viewBox="0 0 300 420"
+          viewBox="0 0 300 345"
           className="absolute inset-0 w-full h-full"
           xmlns="http://www.w3.org/2000/svg"
         >
           {/* Grass background */}
-          <rect x="0" y="0" width="300" height="420" rx="0" fill="#2d8a4e" />
+          <rect x="0" y="0" width="300" height="345" rx="8" fill="#2d8a4e" />
 
           {/* Outer oval boundary */}
-          <ellipse cx="150" cy="210" rx="140" ry="195" fill="none" stroke="white" strokeWidth="2" />
+          <ellipse cx="150" cy="172" rx="140" ry="162" fill="none" stroke="white" strokeWidth="2" />
 
           {/* Centre circle */}
-          <circle cx="150" cy="210" r="30" fill="none" stroke="white" strokeWidth="1.5" />
+          <circle cx="150" cy="172" r="25" fill="none" stroke="white" strokeWidth="1.5" />
 
           {/* Centre square */}
-          <rect x="120" y="180" width="60" height="60" fill="none" stroke="white" strokeWidth="1.5" />
+          <rect x="125" y="147" width="50" height="50" fill="none" stroke="white" strokeWidth="1.5" />
 
           {/* 50m arcs */}
-          <path d="M 50 120 Q 150 160 250 120" fill="none" stroke="white" strokeWidth="1" strokeDasharray="4 4" />
-          <path d="M 50 300 Q 150 260 250 300" fill="none" stroke="white" strokeWidth="1" strokeDasharray="4 4" />
+          <path d="M 55 95 Q 150 125 245 95" fill="none" stroke="white" strokeWidth="1" strokeDasharray="4 4" />
+          <path d="M 55 250 Q 150 220 245 250" fill="none" stroke="white" strokeWidth="1" strokeDasharray="4 4" />
 
           {/* Goal squares */}
           {/* Defence end (top) */}
-          <rect x="125" y="18" width="50" height="25" fill="none" stroke="white" strokeWidth="1.5" />
+          <rect x="125" y="12" width="50" height="22" fill="none" stroke="white" strokeWidth="1.5" />
           {/* Forward end (bottom) */}
-          <rect x="125" y="377" width="50" height="25" fill="none" stroke="white" strokeWidth="1.5" />
+          <rect x="125" y="311" width="50" height="22" fill="none" stroke="white" strokeWidth="1.5" />
 
-          {/* Goal posts (small marks) */}
-          <line x1="125" y1="15" x2="125" y2="20" stroke="white" strokeWidth="2" />
-          <line x1="175" y1="15" x2="175" y2="20" stroke="white" strokeWidth="2" />
-          <line x1="125" y1="400" x2="125" y2="405" stroke="white" strokeWidth="2" />
-          <line x1="175" y1="400" x2="175" y2="405" stroke="white" strokeWidth="2" />
+          {/* Goal posts */}
+          <line x1="125" y1="9" x2="125" y2="14" stroke="white" strokeWidth="2" />
+          <line x1="175" y1="9" x2="175" y2="14" stroke="white" strokeWidth="2" />
+          <line x1="125" y1="331" x2="125" y2="336" stroke="white" strokeWidth="2" />
+          <line x1="175" y1="331" x2="175" y2="336" stroke="white" strokeWidth="2" />
 
           {/* Behind posts */}
-          <line x1="110" y1="18" x2="110" y2="22" stroke="white" strokeWidth="1.5" />
-          <line x1="190" y1="18" x2="190" y2="22" stroke="white" strokeWidth="1.5" />
-          <line x1="110" y1="398" x2="110" y2="402" stroke="white" strokeWidth="1.5" />
-          <line x1="190" y1="398" x2="190" y2="402" stroke="white" strokeWidth="1.5" />
+          <line x1="110" y1="12" x2="110" y2="16" stroke="white" strokeWidth="1.5" />
+          <line x1="190" y1="12" x2="190" y2="16" stroke="white" strokeWidth="1.5" />
+          <line x1="110" y1="329" x2="110" y2="333" stroke="white" strokeWidth="1.5" />
+          <line x1="190" y1="329" x2="190" y2="333" stroke="white" strokeWidth="1.5" />
 
           {/* Zone labels */}
-          <text x="150" y="55" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">DEFENCE</text>
-          <text x="150" y="215" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">MIDFIELD</text>
-          <text x="150" y="375" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">FORWARD</text>
+          <text x="150" y="52" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">DEFENCE</text>
+          <text x="150" y="176" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">MIDFIELD</text>
+          <text x="150" y="305" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="9" fontWeight="bold">FORWARD</text>
         </svg>
 
         {/* Player dots */}

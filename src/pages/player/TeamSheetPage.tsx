@@ -13,6 +13,7 @@ interface TeamSheetPlayer extends SelectionPlayer {
   memberName?: string
   jerseyNumber?: string | null
   positionName?: string
+  primaryPosition?: string | null
 }
 
 interface RoleWithAssignment extends GameDayRole {
@@ -132,6 +133,7 @@ export default function TeamSheetPage() {
             memberName: member?.display_name || member?.guest_name || 'Unknown',
             jerseyNumber: member?.jersey_number,
             positionName: (player.positions as unknown as { name: string } | null)?.name,
+            primaryPosition: member?.primary_position,
           }
         })
 
@@ -323,6 +325,7 @@ export default function TeamSheetPage() {
                     name: p.memberName || 'Unknown',
                     jerseyNumber: p.jerseyNumber,
                     positionName: p.positionName,
+                    primaryPosition: p.primaryPosition,
                     isCurrentUser: p.member_id === currentMember?.id,
                     selectionType: p.selection_type,
                   }))}
