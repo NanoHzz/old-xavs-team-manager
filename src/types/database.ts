@@ -524,7 +524,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_invite_info: {
+        Args: { invite_code: string }
+        Returns: Json
+      }
+      check_team_membership: {
+        Args: { p_team_id: string; p_user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       sport_type: 'afl' | 'soccer' | 'rugby_league' | 'rugby_union'

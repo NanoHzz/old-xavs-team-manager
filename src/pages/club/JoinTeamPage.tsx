@@ -60,8 +60,17 @@ export default function JoinTeamPage() {
     const loadInvite = async () => {
       try {
         // Use RPC function to get invite info (bypasses RLS)
-        const { data: inviteData, error: inviteError } = await supabase
+        const { data: rawInviteData, error: inviteError } = await supabase
           .rpc('get_invite_info', { invite_code: code })
+
+        const inviteData = rawInviteData as {
+          team_id: string
+          team_name: string
+          club_name: string
+          expires_at: string | null
+          max_uses: number | null
+          use_count: number
+        } | null
 
         if (inviteError || !inviteData) {
           setError('Invite code not found or invalid')
@@ -167,14 +176,12 @@ export default function JoinTeamPage() {
     setSavingPosition(true)
 
     try {
-      const updates: Record<string, string | null> = {
-        primary_position: primaryPosition || null,
-        secondary_position: secondaryPosition || null,
-      }
-
       const { error } = await supabase
         .from('members')
-        .update(updates)
+        .update({
+          primary_position: primaryPosition || null,
+          secondary_position: secondaryPosition || null,
+        })
         .eq('id', newMemberId)
 
       if (error) throw error
