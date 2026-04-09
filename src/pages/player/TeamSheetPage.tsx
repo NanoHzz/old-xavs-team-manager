@@ -131,7 +131,7 @@ export default function TeamSheetPage() {
             ...player,
             memberName: member?.display_name || member?.guest_name || 'Unknown',
             jerseyNumber: member?.jersey_number,
-            positionName: (player.positions as unknown as Position[])?.[0]?.name,
+            positionName: (player.positions as unknown as { name: string } | null)?.name,
           }
         })
 

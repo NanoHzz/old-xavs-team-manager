@@ -137,7 +137,7 @@ export default function DashboardPage() {
 
           if (selectionPlayersData) {
             selectionStatus = selectionPlayersData.selection_type === 'on_field' ? 'selected' : selectionPlayersData.selection_type
-            position = (selectionPlayersData.positions as unknown as Position[])?.[0]
+            position = selectionPlayersData.positions as unknown as Position
           }
         }
 
