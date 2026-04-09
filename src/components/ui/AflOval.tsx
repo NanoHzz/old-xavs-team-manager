@@ -174,10 +174,6 @@ export function AflOval({ players, className = '', compact = false }: AflOvalPro
 
   const benchPlayers = players.filter(p => p.selectionType !== 'on_field')
 
-  const dotSize = compact ? 'w-5 h-5' : 'w-8 h-8'
-  const dotText = compact ? 'text-[7px]' : 'text-xs'
-  const nameText = compact ? 'text-[6px]' : 'text-[9px]'
-  const nameMaxW = compact ? 'max-w-[45px]' : 'max-w-[60px]'
   const paddingBottom = compact ? '75%' : '115%'
 
   return (
@@ -233,31 +229,59 @@ export function AflOval({ players, className = '', compact = false }: AflOvalPro
           )}
         </svg>
 
-        {/* Player dots */}
-        {positionedPlayers.map((player, i) => (
-          <div
-            key={i}
-            className="absolute flex flex-col items-center"
-            style={{
-              left: `${player.x}%`,
-              top: `${player.y}%`,
-              transform: 'translate(-50%, -50%)',
-            }}
-          >
+        {/* Player labels */}
+        {positionedPlayers.map((player, i) => {
+          // Format as "F.Surname"
+          const parts = player.name.split(' ')
+          const shortName = parts.length > 1
+            ? `${parts[0].charAt(0)}.${parts[parts.length - 1]}`
+            : player.name
+
+          return compact ? (
             <div
-              className={`${dotSize} rounded-full flex items-center justify-center ${dotText} font-bold shadow-lg border-2 ${
-                player.isCurrentUser
-                  ? 'bg-yellow-400 border-yellow-200 text-gray-900'
-                  : 'bg-white border-gray-200 text-gray-900'
-              }`}
+              key={i}
+              className="absolute"
+              style={{
+                left: `${player.x}%`,
+                top: `${player.y}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
             >
-              {player.jerseyNumber ? `#${player.jerseyNumber}` : player.name.charAt(0)}
+              <span
+                className={`whitespace-nowrap text-[8px] font-semibold px-1.5 py-0.5 rounded shadow ${
+                  player.isCurrentUser
+                    ? 'bg-yellow-400 text-gray-900'
+                    : 'bg-white text-gray-900'
+                }`}
+              >
+                {shortName}
+              </span>
             </div>
-            <span className={`text-white ${nameText} font-medium mt-0.5 bg-black bg-opacity-50 px-1 rounded whitespace-nowrap ${nameMaxW} truncate`}>
-              {player.name.split(' ').pop()}
-            </span>
-          </div>
-        ))}
+          ) : (
+            <div
+              key={i}
+              className="absolute flex flex-col items-center"
+              style={{
+                left: `${player.x}%`,
+                top: `${player.y}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
+            >
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-lg border-2 ${
+                  player.isCurrentUser
+                    ? 'bg-yellow-400 border-yellow-200 text-gray-900'
+                    : 'bg-white border-gray-200 text-gray-900'
+                }`}
+              >
+                {player.jerseyNumber ? `#${player.jerseyNumber}` : player.name.charAt(0)}
+              </div>
+              <span className="text-white text-[9px] font-medium mt-0.5 bg-black bg-opacity-50 px-1 rounded whitespace-nowrap max-w-[60px] truncate">
+                {shortName}
+              </span>
+            </div>
+          )
+        })}
       </div>
 
       {/* Bench */}

@@ -421,6 +421,7 @@ export default function DashboardPage() {
                 </div>
                 <AflOval
                   compact
+                  className="-mx-4"
                   players={draftPlayers.map(dp => ({
                     name: dp.member.display_name || dp.member.guest_name || 'Unknown',
                     jerseyNumber: dp.member.jersey_number,
