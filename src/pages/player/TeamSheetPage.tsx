@@ -7,7 +7,7 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { AflOval } from '../../components/ui/AflOval'
 import { Users, LayoutGrid, Map } from 'lucide-react'
-import type { Round, TeamSelection, SelectionPlayer, Position, GameDayRole } from '../../types'
+import type { Round, TeamSelection, SelectionPlayer, GameDayRole } from '../../types'
 
 interface TeamSheetPlayer extends SelectionPlayer {
   memberName?: string

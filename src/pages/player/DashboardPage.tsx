@@ -160,24 +160,22 @@ export default function DashboardPage() {
           .in('status', ['available', 'maybe'])
 
         if (allAvailData) {
-          const draft: DraftPlayer[] = allAvailData
-            .map(av => {
-              const member = members.find(m => m.id === av.member_id)
-              if (!member || member.status !== 'active') return null
-              return {
-                member,
-                status: av.status as 'available' | 'maybe',
-                primaryPosition: member.primary_position || undefined,
-                secondaryPosition: member.secondary_position || undefined,
-              }
+          const draft: DraftPlayer[] = []
+          for (const av of allAvailData) {
+            const member = members.find(m => m.id === av.member_id)
+            if (!member || member.status !== 'active') continue
+            draft.push({
+              member,
+              status: av.status as 'available' | 'maybe',
+              primaryPosition: member.primary_position || undefined,
+              secondaryPosition: member.secondary_position || undefined,
             })
-            .filter((p): p is DraftPlayer => p !== null)
-            .sort((a, b) => {
-              // Available first, then maybe
-              if (a.status === 'available' && b.status !== 'available') return -1
-              if (a.status !== 'available' && b.status === 'available') return 1
-              return (a.member.display_name || '').localeCompare(b.member.display_name || '')
-            })
+          }
+          draft.sort((a, b) => {
+            if (a.status === 'available' && b.status !== 'available') return -1
+            if (a.status !== 'available' && b.status === 'available') return 1
+            return (a.member.display_name || '').localeCompare(b.member.display_name || '')
+          })
           setDraftPlayers(draft)
         }
       }
