@@ -6,7 +6,7 @@ import { Card } from '../../components/ui/Card'
 import { Input } from '../../components/ui/Input'
 import type { Season, Round } from '../../types'
 import { format, addDays, parse, isBefore } from 'date-fns'
-import { localDateTimeToISO, isoToLocalDateTime } from '../../lib/utils'
+import { localDateTimeToISO, isoToLocalDateTime, formatDateTime } from '../../lib/utils'
 import { ChevronDown, ChevronUp, Plus, Trash2, Edit2, X } from 'lucide-react'
 
 interface RoundWithStatus extends Round {
@@ -762,7 +762,7 @@ export default function RoundsPage() {
                         )}
                         {round.date_time && (
                           <p className="text-sm text-gray-500">
-                            {format(new Date(round.date_time), 'MMM d, yyyy h:mm a')}
+                            {formatDateTime(round.date_time)}
                           </p>
                         )}
                         {round.venue && (
@@ -880,7 +880,7 @@ export default function RoundsPage() {
                             {round.date_time && (
                               <div>
                                 <p className="text-sm font-medium text-gray-600">Date & Time</p>
-                                <p>{format(new Date(round.date_time), 'EEEE, MMM d, yyyy h:mm a')}</p>
+                                <p>{formatDateTime(round.date_time)}</p>
                               </div>
                             )}
                             <div className="flex gap-2 pt-4 border-t border-gray-300">
