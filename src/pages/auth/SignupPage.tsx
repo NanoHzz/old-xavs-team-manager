@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { Shield } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { Button } from '../../components/ui/Button'
@@ -8,6 +8,8 @@ import { Card } from '../../components/ui/Card'
 
 export default function SignupPage() {
   const { signUp } = useAuth()
+  const location = useLocation()
+  const returnUrl = (location.state as { returnUrl?: string })?.returnUrl
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -55,7 +57,11 @@ export default function SignupPage() {
     setLoading(true)
 
     try {
-      await signUp(email, password, fullName)
+      // If there's a returnUrl (e.g. from invite link), pass it as the email redirect
+      const redirectTo = returnUrl
+        ? `${window.location.origin}${returnUrl}`
+        : undefined
+      await signUp(email, password, fullName, redirectTo)
       setSubmitted(true)
     } catch (err) {
       setErrors({
@@ -75,7 +81,8 @@ export default function SignupPage() {
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Check your email!</h2>
             <p className="text-gray-600 mb-6">
-              We've sent you a confirmation link. Please click it to verify your account and get started.
+              We've sent you a confirmation link. Please click it to verify your account
+              {returnUrl ? ' and join the team' : ' and get started'}.
             </p>
             <Link
               to="/login"

@@ -67,12 +67,14 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public routes */}
+      {/* Join route available for both logged-in and logged-out users */}
+      <Route path="/join/:code" element={<JoinTeamPage />} />
+
       {!user ? (
         <>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/magic-link" element={<MagicLinkPage />} />
-          <Route path="/join/:code" element={<JoinTeamPage />} />
           <Route path="*" element={<Navigate to="/login" />} />
         </>
       ) : (

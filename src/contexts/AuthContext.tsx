@@ -8,7 +8,7 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, fullName: string) => Promise<void>
+  signUp: (email: string, password: string, fullName: string, redirectTo?: string) => Promise<void>
   signInWithMagicLink: (email: string) => Promise<void>
   signOut: () => Promise<void>
 }
@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error
   }
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = async (email: string, password: string, fullName: string, redirectTo?: string) => {
     const { error, data } = await supabase.auth.signUp({
       email,
       password,
@@ -55,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data: {
           full_name: fullName,
         },
+        ...(redirectTo ? { emailRedirectTo: redirectTo } : {}),
       },
     })
     if (error) throw error
