@@ -60,17 +60,25 @@ export default function TeamSheetPage() {
             .from('rounds')
             .select('*')
             .in('season_id', seasonIds)
-            .order('date_time', { ascending: false })
+            .order('round_number', { ascending: true })
         : { data: [], error: null }
 
       if (error) {
         console.error('Error fetching rounds:', error)
         setRounds([])
       } else {
-        setRounds(data || [])
-        // Set first round as default
-        if (data && data.length > 0) {
-          setSelectedRoundId(data[0].id)
+        const allRounds = data || []
+        setRounds(allRounds)
+        // Default to nearest upcoming round, or most recent past round
+        if (allRounds.length > 0) {
+          const now = new Date().getTime()
+          const upcoming = allRounds.find(r => r.date_time && new Date(r.date_time).getTime() >= now)
+          if (upcoming) {
+            setSelectedRoundId(upcoming.id)
+          } else {
+            // No upcoming rounds — pick the most recent past round
+            setSelectedRoundId(allRounds[allRounds.length - 1].id)
+          }
         }
       }
     }
@@ -220,7 +228,7 @@ export default function TeamSheetPage() {
           <p className="text-gray-500 text-sm mt-1">View the selected team for your match</p>
         </div>
         {/* View toggle */}
-        {teamSheet && (
+        {rounds.length > 0 && (
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             <button
               onClick={() => setViewMode('oval')}
@@ -263,13 +271,27 @@ export default function TeamSheetPage() {
       </Card>
 
       {!teamSheet ? (
-        <Card>
-          <EmptyState
-            icon={<Users className="w-12 h-12" />}
-            title="Team not yet announced"
-            description="The coach has not announced the team selection for this round."
-          />
-        </Card>
+        <div className="space-y-4">
+          {viewMode === 'oval' && (
+            <Card title="Team Positions" padding={false}>
+              <div className="p-2">
+                <AflOval players={[]} />
+              </div>
+              <div className="p-4 pt-0 text-center">
+                <p className="text-gray-500 text-sm">Team not yet announced for this round</p>
+              </div>
+            </Card>
+          )}
+          {viewMode === 'list' && (
+            <Card>
+              <EmptyState
+                icon={<Users className="w-12 h-12" />}
+                title="Team not yet announced"
+                description="The coach has not announced the team selection for this round."
+              />
+            </Card>
+          )}
+        </div>
       ) : (
         <>
           {/* Game Info */}

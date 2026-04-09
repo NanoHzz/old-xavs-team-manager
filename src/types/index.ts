@@ -17,6 +17,8 @@ export type RotationPlan = Database['public']['Tables']['rotation_plans']['Row']
 export type GameDayRole = Database['public']['Tables']['game_day_roles']['Row']
 export type RoleAssignment = Database['public']['Tables']['role_assignments']['Row']
 export type Notification = Database['public']['Tables']['notifications']['Row']
+export type TeamAnnouncement = Database['public']['Tables']['team_announcements']['Row']
+export type AnnouncementComment = Database['public']['Tables']['announcement_comments']['Row']
 export type InviteCode = Database['public']['Tables']['invite_codes']['Row']
 
 // Insert Types
@@ -36,6 +38,8 @@ export type RotationPlanInsert = Database['public']['Tables']['rotation_plans'][
 export type GameDayRoleInsert = Database['public']['Tables']['game_day_roles']['Insert']
 export type RoleAssignmentInsert = Database['public']['Tables']['role_assignments']['Insert']
 export type NotificationInsert = Database['public']['Tables']['notifications']['Insert']
+export type TeamAnnouncementInsert = Database['public']['Tables']['team_announcements']['Insert']
+export type AnnouncementCommentInsert = Database['public']['Tables']['announcement_comments']['Insert']
 export type InviteCodeInsert = Database['public']['Tables']['invite_codes']['Insert']
 
 // Update Types

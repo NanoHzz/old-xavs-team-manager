@@ -8,8 +8,8 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { Calendar, AlertCircle, Plus, Send, X } from 'lucide-react'
-import type { Round, PlayerAvailability, Position } from '../../types'
+import { Calendar, AlertCircle, Plus, Send, X, MessageCircle, Users } from 'lucide-react'
+import type { Round, PlayerAvailability, Position, Member } from '../../types'
 
 interface NextGame {
   round: Round
@@ -18,12 +18,32 @@ interface NextGame {
   position?: Position
 }
 
-interface RecentNotification {
+interface DraftPlayer {
+  member: Member
+  status: 'available' | 'maybe'
+  primaryPosition?: string
+  secondaryPosition?: string
+}
+
+interface Announcement {
   id: string
-  title: string | null
+  team_id: string
+  member_id: string
+  title: string
   body: string | null
-  type: string | null
   created_at: string
+  authorName?: string
+  authorRole?: string
+  comments: AnnouncementCommentData[]
+}
+
+interface AnnouncementCommentData {
+  id: string
+  announcement_id: string
+  member_id: string
+  body: string
+  created_at: string
+  authorName?: string
 }
 
 export default function DashboardPage() {
@@ -32,18 +52,24 @@ export default function DashboardPage() {
 
   const [nextGame, setNextGame] = useState<NextGame | null>(null)
   const [availability, setAvailability] = useState<'available' | 'unavailable' | 'maybe' | null>(null)
-  const [notifications, setNotifications] = useState<RecentNotification[]>([])
   const [gamesPlayed, setGamesPlayed] = useState(0)
   const [loading, setLoading] = useState(true)
   const [updatingAvailability, setUpdatingAvailability] = useState(false)
 
-  // Coach message state
-  const [showMessageForm, setShowMessageForm] = useState(false)
-  const [messageTitle, setMessageTitle] = useState('')
-  const [messageBody, setMessageBody] = useState('')
-  const [sendingMessage, setSendingMessage] = useState(false)
+  // Draft team state
+  const [draftPlayers, setDraftPlayers] = useState<DraftPlayer[]>([])
 
-  const isCoachOrAdmin = currentMember?.role === 'coach' || currentMember?.role === 'admin'
+  // Announcements state
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [showPostForm, setShowPostForm] = useState(false)
+  const [postTitle, setPostTitle] = useState('')
+  const [postBody, setPostBody] = useState('')
+  const [sendingPost, setSendingPost] = useState(false)
+
+  // Comment state
+  const [expandedAnnouncement, setExpandedAnnouncement] = useState<string | null>(null)
+  const [commentText, setCommentText] = useState('')
+  const [sendingComment, setSendingComment] = useState(false)
 
   useEffect(() => {
     if (!currentTeam || !currentMember || !user) {
@@ -125,17 +151,76 @@ export default function DashboardPage() {
         if (availData) {
           setAvailability(availData.status)
         }
+
+        // Fetch draft team - all available/maybe players for this round
+        const { data: allAvailData } = await supabase
+          .from('player_availability')
+          .select('*')
+          .eq('round_id', nextRound.id)
+          .in('status', ['available', 'maybe'])
+
+        if (allAvailData) {
+          const draft: DraftPlayer[] = allAvailData
+            .map(av => {
+              const member = members.find(m => m.id === av.member_id)
+              if (!member || member.status !== 'active') return null
+              return {
+                member,
+                status: av.status as 'available' | 'maybe',
+                primaryPosition: member.primary_position || undefined,
+                secondaryPosition: member.secondary_position || undefined,
+              }
+            })
+            .filter((p): p is DraftPlayer => p !== null)
+            .sort((a, b) => {
+              // Available first, then maybe
+              if (a.status === 'available' && b.status !== 'available') return -1
+              if (a.status !== 'available' && b.status === 'available') return 1
+              return (a.member.display_name || '').localeCompare(b.member.display_name || '')
+            })
+          setDraftPlayers(draft)
+        }
       }
 
-      // Fetch recent notifications
-      const { data: notificationsData } = await supabase
-        .from('notifications')
+      // Fetch announcements for this team
+      const { data: announcementsData } = await supabase
+        .from('team_announcements')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('team_id', currentTeam.id)
         .order('created_at', { ascending: false })
-        .limit(5)
+        .limit(10)
 
-      setNotifications(notificationsData || [])
+      if (announcementsData && announcementsData.length > 0) {
+        // Fetch comments for all announcements
+        const announcementIds = announcementsData.map(a => a.id)
+        const { data: commentsData } = await supabase
+          .from('announcement_comments')
+          .select('*')
+          .in('announcement_id', announcementIds)
+          .order('created_at', { ascending: true })
+
+        const enriched: Announcement[] = announcementsData.map(a => {
+          const author = members.find(m => m.id === a.member_id)
+          const comments = (commentsData || [])
+            .filter(c => c.announcement_id === a.id)
+            .map(c => {
+              const commentAuthor = members.find(m => m.id === c.member_id)
+              return {
+                ...c,
+                authorName: commentAuthor?.display_name || commentAuthor?.guest_name || 'Unknown',
+              }
+            })
+          return {
+            ...a,
+            authorName: author?.display_name || author?.guest_name || 'Unknown',
+            authorRole: author?.role || 'player',
+            comments,
+          }
+        })
+        setAnnouncements(enriched)
+      } else {
+        setAnnouncements([])
+      }
 
       // Count games played this season
       const { data: selectedData, error: selectedError } = await supabase
@@ -180,46 +265,71 @@ export default function DashboardPage() {
     }
   }
 
-  const handleSendMessage = async () => {
-    if (!currentTeam || !currentMember || !messageTitle.trim()) return
+  const handlePostAnnouncement = async () => {
+    if (!currentTeam || !currentMember || !postTitle.trim()) return
 
-    setSendingMessage(true)
+    setSendingPost(true)
     try {
-      // Get all team members' user IDs (excluding the sender)
-      const recipients = members.filter(m => m.user_id !== currentMember.user_id && m.status === 'active')
-
-      if (recipients.length === 0) {
-        alert('No team members to notify')
-        return
-      }
-
-      const notificationInserts = recipients.map(m => ({
-        user_id: m.user_id,
-        type: 'coach_message',
-        title: messageTitle.trim(),
-        body: messageBody.trim() || null,
-        read: false,
-      }))
-
       const { error } = await supabase
-        .from('notifications')
-        .insert(notificationInserts)
+        .from('team_announcements')
+        .insert({
+          team_id: currentTeam.id,
+          member_id: currentMember.id,
+          title: postTitle.trim(),
+          body: postBody.trim() || null,
+        })
 
       if (error) throw error
 
-      // Reset form
-      setMessageTitle('')
-      setMessageBody('')
-      setShowMessageForm(false)
-
-      // Refresh notifications (the coach will also see their own if they want)
+      setPostTitle('')
+      setPostBody('')
+      setShowPostForm(false)
       await fetchDashboardData()
     } catch (err) {
-      console.error('Error sending message:', err)
-      alert('Failed to send message')
+      console.error('Error posting announcement:', err)
+      alert('Failed to post announcement')
     } finally {
-      setSendingMessage(false)
+      setSendingPost(false)
     }
+  }
+
+  const handlePostComment = async (announcementId: string) => {
+    if (!currentMember || !commentText.trim()) return
+
+    setSendingComment(true)
+    try {
+      const { error } = await supabase
+        .from('announcement_comments')
+        .insert({
+          announcement_id: announcementId,
+          member_id: currentMember.id,
+          body: commentText.trim(),
+        })
+
+      if (error) throw error
+
+      setCommentText('')
+      await fetchDashboardData()
+    } catch (err) {
+      console.error('Error posting comment:', err)
+      alert('Failed to post comment')
+    } finally {
+      setSendingComment(false)
+    }
+  }
+
+  const timeAgo = (dateStr: string) => {
+    const now = new Date().getTime()
+    const date = new Date(dateStr).getTime()
+    const diffMs = now - date
+    const diffMins = Math.floor(diffMs / 60000)
+    if (diffMins < 1) return 'just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    const diffHrs = Math.floor(diffMins / 60)
+    if (diffHrs < 24) return `${diffHrs}h ago`
+    const diffDays = Math.floor(diffHrs / 24)
+    if (diffDays < 7) return `${diffDays}d ago`
+    return formatDate(dateStr)
   }
 
   if (loading) {
@@ -238,7 +348,7 @@ export default function DashboardPage() {
         <p className="text-gray-500 text-sm mt-1">Welcome, {user?.user_metadata?.full_name || 'Player'}</p>
       </div>
 
-      {/* Next Game Card */}
+      {/* Next Game Card with Draft Team */}
       <Card title="Next Game">
         {nextGame ? (
           <div className="space-y-4">
@@ -280,6 +390,43 @@ export default function DashboardPage() {
               <div className="text-sm">
                 <p className="text-gray-600">Venue</p>
                 <p className="font-medium">{nextGame.round.venue}</p>
+              </div>
+            )}
+
+            {/* Draft Team based on availability */}
+            {draftPlayers.length > 0 && (
+              <div className="border-t pt-3 mt-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="w-4 h-4 text-gray-500" />
+                  <p className="text-sm font-semibold text-gray-700">Draft Team ({draftPlayers.length} available)</p>
+                </div>
+                <div className="space-y-1.5">
+                  {draftPlayers.map(dp => (
+                    <div
+                      key={dp.member.id}
+                      className={`flex items-center justify-between p-2 rounded text-sm ${
+                        dp.member.id === currentMember?.id ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {dp.member.jersey_number && (
+                          <span className="text-xs bg-gray-300 text-gray-900 px-1.5 py-0.5 rounded font-bold">
+                            #{dp.member.jersey_number}
+                          </span>
+                        )}
+                        <span>{dp.member.display_name || dp.member.guest_name || 'Unknown'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {dp.primaryPosition && (
+                          <span className="text-xs text-gray-500">{dp.primaryPosition}</span>
+                        )}
+                        <Badge variant={dp.status === 'available' ? 'success' : 'warning'}>
+                          {dp.status === 'available' ? 'In' : 'Maybe'}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -350,80 +497,134 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      {/* Recent Notifications with Coach Message Button */}
+      {/* Team Board - Announcements */}
       <Card
         title={
           <div className="flex items-center justify-between w-full">
-            <span>Recent Notifications</span>
-            {isCoachOrAdmin && (
-              <button
-                onClick={() => setShowMessageForm(!showMessageForm)}
-                className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                title="Send message to team"
-              >
-                {showMessageForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              </button>
-            )}
+            <span>Team Board</span>
+            <button
+              onClick={() => setShowPostForm(!showPostForm)}
+              className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              title="Post to team board"
+            >
+              {showPostForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            </button>
           </div>
         }
       >
-        {/* Coach Message Form */}
-        {showMessageForm && isCoachOrAdmin && (
+        {/* Post Form - available to all team members */}
+        {showPostForm && (
           <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-xs font-semibold text-blue-700 mb-2">Send message to all players</p>
+            <p className="text-xs font-semibold text-blue-700 mb-2">Post to team board</p>
             <input
               type="text"
-              placeholder="Message title..."
-              value={messageTitle}
-              onChange={(e) => setMessageTitle(e.target.value)}
+              placeholder="Title..."
+              value={postTitle}
+              onChange={(e) => setPostTitle(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               maxLength={100}
             />
             <textarea
-              placeholder="Message body (optional)..."
-              value={messageBody}
-              onChange={(e) => setMessageBody(e.target.value)}
+              placeholder="Write something (optional)..."
+              value={postBody}
+              onChange={(e) => setPostBody(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               rows={3}
               maxLength={500}
             />
             <Button
-              onClick={handleSendMessage}
+              onClick={handlePostAnnouncement}
               variant="primary"
               fullWidth
-              loading={sendingMessage}
-              disabled={!messageTitle.trim()}
+              loading={sendingPost}
+              disabled={!postTitle.trim()}
             >
               <Send className="w-4 h-4 mr-1" />
-              Send to Team ({members.filter(m => m.user_id !== currentMember?.user_id && m.status === 'active').length} players)
+              Post
             </Button>
           </div>
         )}
 
-        {notifications.length > 0 ? (
-          <div className="space-y-3">
-            {notifications.map(notif => (
-              <div key={notif.id} className="border-b last:border-b-0 pb-3 last:pb-0">
+        {announcements.length > 0 ? (
+          <div className="space-y-4">
+            {announcements.map(announcement => (
+              <div key={announcement.id} className="border-b last:border-b-0 pb-4 last:pb-0">
+                {/* Announcement header */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1">
-                    <p className="font-medium text-sm">{notif.title}</p>
-                    <p className="text-gray-600 text-sm">{notif.body}</p>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-semibold text-sm">{announcement.authorName}</span>
+                      {(announcement.authorRole === 'coach' || announcement.authorRole === 'admin') && (
+                        <Badge variant="info">{announcement.authorRole === 'coach' ? 'Coach' : 'Admin'}</Badge>
+                      )}
+                      <span className="text-xs text-gray-400">{timeAgo(announcement.created_at)}</span>
+                    </div>
+                    <p className="font-medium text-sm">{announcement.title}</p>
+                    {announcement.body && (
+                      <p className="text-gray-600 text-sm mt-1">{announcement.body}</p>
+                    )}
                   </div>
-                  <Badge variant={notif.type === 'coach_message' ? 'info' : 'default'}>
-                    {notif.type === 'coach_message' ? 'Coach' : notif.type}
-                  </Badge>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  {formatDate(notif.created_at)}
-                </p>
+
+                {/* Comment toggle + count */}
+                <button
+                  onClick={() => setExpandedAnnouncement(
+                    expandedAnnouncement === announcement.id ? null : announcement.id
+                  )}
+                  className="flex items-center gap-1 mt-2 text-xs text-gray-500 hover:text-gray-700"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  {announcement.comments.length > 0
+                    ? `${announcement.comments.length} comment${announcement.comments.length > 1 ? 's' : ''}`
+                    : 'Comment'}
+                </button>
+
+                {/* Expanded comments */}
+                {expandedAnnouncement === announcement.id && (
+                  <div className="mt-2 ml-3 border-l-2 border-gray-200 pl-3 space-y-2">
+                    {announcement.comments.map(comment => (
+                      <div key={comment.id} className="text-sm">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-xs">{comment.authorName}</span>
+                          <span className="text-xs text-gray-400">{timeAgo(comment.created_at)}</span>
+                        </div>
+                        <p className="text-gray-700 text-sm">{comment.body}</p>
+                      </div>
+                    ))}
+
+                    {/* Comment input */}
+                    <div className="flex gap-2 pt-1">
+                      <input
+                        type="text"
+                        placeholder="Write a comment..."
+                        value={expandedAnnouncement === announcement.id ? commentText : ''}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && commentText.trim()) {
+                            handlePostComment(announcement.id)
+                          }
+                        }}
+                        className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        maxLength={300}
+                      />
+                      <button
+                        onClick={() => handlePostComment(announcement.id)}
+                        disabled={!commentText.trim() || sendingComment}
+                        className="px-2 py-1.5 bg-blue-600 text-white rounded text-sm disabled:opacity-50 hover:bg-blue-700"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         ) : (
           <EmptyState
             icon={<AlertCircle className="w-8 h-8" />}
-            title="No notifications"
-            description="You're all caught up!"
+            title="No posts yet"
+            description="Be the first to post on the team board!"
           />
         )}
       </Card>

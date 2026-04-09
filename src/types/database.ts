@@ -486,6 +486,57 @@ export type Database = {
         }
         Relationships: []
       }
+      team_announcements: {
+        Row: {
+          id: string
+          team_id: string
+          member_id: string
+          title: string
+          body: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          member_id: string
+          title: string
+          body?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          member_id?: string
+          title?: string
+          body?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      announcement_comments: {
+        Row: {
+          id: string
+          announcement_id: string
+          member_id: string
+          body: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          announcement_id: string
+          member_id: string
+          body: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          announcement_id?: string
+          member_id?: string
+          body?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       invite_codes: {
         Row: {
           id: string
