@@ -74,6 +74,7 @@ const POSITION_ZONES: Record<string, { x: number; y: number }> = {
 
 // Map member primary_position enum values to oval zones (fallback)
 const PRIMARY_POSITION_ZONES: Record<string, { x: number; y: number }> = {
+  'back_key': { x: 50, y: 12 },
   'back_general': { x: 35, y: 22 },
   'back_pocket': { x: 25, y: 18 },
   'full_back': { x: 50, y: 12 },
@@ -86,6 +87,8 @@ const PRIMARY_POSITION_ZONES: Record<string, { x: number; y: number }> = {
   'ruck_rover': { x: 42, y: 50 },
   'rover': { x: 58, y: 50 },
   'fwd_general': { x: 35, y: 78 },
+  'forward_key': { x: 50, y: 88 },
+  'forward_small': { x: 25, y: 82 },
   'forward_pocket': { x: 25, y: 82 },
   'full_forward': { x: 50, y: 88 },
   'centre_half_forward': { x: 50, y: 72 },
@@ -171,11 +174,11 @@ export function AflOval({ players, className = '', compact = false }: AflOvalPro
 
   const benchPlayers = players.filter(p => p.selectionType !== 'on_field')
 
-  const dotSize = compact ? 'w-6 h-6' : 'w-8 h-8'
-  const dotText = compact ? 'text-[8px]' : 'text-xs'
-  const nameText = compact ? 'text-[7px]' : 'text-[9px]'
-  const nameMaxW = compact ? 'max-w-[50px]' : 'max-w-[60px]'
-  const paddingBottom = compact ? '90%' : '115%'
+  const dotSize = compact ? 'w-5 h-5' : 'w-8 h-8'
+  const dotText = compact ? 'text-[7px]' : 'text-xs'
+  const nameText = compact ? 'text-[6px]' : 'text-[9px]'
+  const nameMaxW = compact ? 'max-w-[45px]' : 'max-w-[60px]'
+  const paddingBottom = compact ? '75%' : '115%'
 
   return (
     <div className={className}>

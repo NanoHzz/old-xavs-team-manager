@@ -24,6 +24,7 @@ interface DraftPlayer {
   status: 'available' | 'maybe'
   primaryPosition?: string
   secondaryPosition?: string
+  assignedPositionName?: string
 }
 
 interface Announcement {
@@ -160,6 +161,24 @@ export default function DashboardPage() {
           .eq('round_id', nextRound.id)
           .in('status', ['available', 'maybe'])
 
+        // Also fetch all position assignments for this round (if team selection exists)
+        const assignedPositions: Record<string, string> = {}
+        if (teamSelectionData) {
+          const { data: allSelectionPlayers } = await supabase
+            .from('selection_players')
+            .select('member_id, positions(name)')
+            .eq('team_selection_id', teamSelectionData.id)
+
+          if (allSelectionPlayers) {
+            for (const sp of allSelectionPlayers) {
+              const posName = (sp.positions as unknown as { name: string } | null)?.name
+              if (posName) {
+                assignedPositions[sp.member_id] = posName
+              }
+            }
+          }
+        }
+
         if (allAvailData) {
           const draft: DraftPlayer[] = []
           for (const av of allAvailData) {
@@ -170,6 +189,7 @@ export default function DashboardPage() {
               status: av.status as 'available' | 'maybe',
               primaryPosition: member.primary_position || undefined,
               secondaryPosition: member.secondary_position || undefined,
+              assignedPositionName: assignedPositions[member.id],
             })
           }
           draft.sort((a, b) => {
@@ -404,6 +424,7 @@ export default function DashboardPage() {
                   players={draftPlayers.map(dp => ({
                     name: dp.member.display_name || dp.member.guest_name || 'Unknown',
                     jerseyNumber: dp.member.jersey_number,
+                    positionName: dp.assignedPositionName,
                     primaryPosition: dp.primaryPosition || null,
                     isCurrentUser: dp.member.id === currentMember?.id,
                     selectionType: 'on_field',
