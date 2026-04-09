@@ -174,7 +174,13 @@ export default function ProfilePage() {
             </div>
             <div>
               <p className="text-sm text-gray-600">Role</p>
-              <p className="font-semibold capitalize">{currentMember?.role || 'Player'}</p>
+              <p className="font-semibold capitalize">
+                {currentMember?.role === 'coach' && currentMember?.is_playing
+                  ? 'Player-Coach'
+                  : currentMember?.role === 'admin' && currentMember?.is_playing
+                    ? 'Admin · Player'
+                    : currentMember?.role || 'Player'}
+              </p>
             </div>
           </div>
         </Card>

@@ -16,7 +16,17 @@ interface InviteInfo {
   usedCount: number
 }
 
-type PageState = 'loading' | 'valid' | 'joined' | 'error' | 'expired'
+const POSITION_OPTIONS = [
+  { value: 'back_key', label: 'Back (Key)' },
+  { value: 'back_general', label: 'Back (General)' },
+  { value: 'mid_centre', label: 'Mid (Centre)' },
+  { value: 'mid_wing', label: 'Mid (Wing)' },
+  { value: 'ruck', label: 'Ruck' },
+  { value: 'forward_key', label: 'Forward (Key)' },
+  { value: 'forward_small', label: 'Forward (Small)' },
+]
+
+type PageState = 'loading' | 'valid' | 'position_select' | 'joined' | 'error' | 'expired'
 
 export default function JoinTeamPage() {
   const { code } = useParams<{ code: string }>()
@@ -30,6 +40,12 @@ export default function JoinTeamPage() {
   const [error, setError] = useState('')
   const [joining, setJoining] = useState(false)
 
+  // Position selection state
+  const [primaryPosition, setPrimaryPosition] = useState('')
+  const [secondaryPosition, setSecondaryPosition] = useState('')
+  const [savingPosition, setSavingPosition] = useState(false)
+  const [newMemberId, setNewMemberId] = useState<string | null>(null)
+
   // Check if user is logged in, if not redirect to signup with return url
   useEffect(() => {
     if (!authLoading && !user) {
@@ -37,21 +53,18 @@ export default function JoinTeamPage() {
     }
   }, [user, authLoading, navigate, location.pathname])
 
-  // Load invite code info
+  // Load invite code info using RPC function (bypasses RLS)
   useEffect(() => {
     if (!user || !code) return
 
     const loadInvite = async () => {
       try {
-        // Get invite code
+        // Use RPC function to get invite info (bypasses RLS)
         const { data: inviteData, error: inviteError } = await supabase
-          .from('invite_codes')
-          .select('*')
-          .eq('code', code)
-          .single()
+          .rpc('get_invite_info', { invite_code: code })
 
         if (inviteError || !inviteData) {
-          setError('Invite code not found')
+          setError('Invite code not found or invalid')
           setPageState('error')
           return
         }
@@ -73,50 +86,23 @@ export default function JoinTeamPage() {
           return
         }
 
-        // Get team info
-        const { data: teamData, error: teamError } = await supabase
-          .from('teams')
-          .select('id, name, club_id')
-          .eq('id', inviteData.team_id)
-          .single()
+        // Check if already a member using RPC function (bypasses RLS)
+        const { data: isMember } = await supabase
+          .rpc('check_team_membership', {
+            p_team_id: inviteData.team_id,
+            p_user_id: user.id,
+          })
 
-        if (teamError || !teamData) {
-          setError('Team not found')
-          setPageState('error')
-          return
-        }
-
-        // Get club info
-        const { data: clubData, error: clubError } = await supabase
-          .from('clubs')
-          .select('name')
-          .eq('id', teamData.club_id)
-          .single()
-
-        if (clubError || !clubData) {
-          setError('Club not found')
-          setPageState('error')
-          return
-        }
-
-        // Check if already a member
-        const { data: memberData } = await supabase
-          .from('members')
-          .select('id')
-          .eq('team_id', teamData.id)
-          .eq('user_id', user.id)
-          .single()
-
-        if (memberData) {
+        if (isMember) {
           setError('You are already a member of this team')
           setPageState('error')
           return
         }
 
         setInviteInfo({
-          teamId: teamData.id,
-          teamName: teamData.name,
-          clubName: clubData.name,
+          teamId: inviteData.team_id,
+          teamName: inviteData.team_name,
+          clubName: inviteData.club_name,
           expiresAt: inviteData.expires_at,
           maxUses: inviteData.max_uses,
           usedCount: inviteData.use_count,
@@ -139,7 +125,7 @@ export default function JoinTeamPage() {
 
     try {
       // Create member record
-      const { error: memberError } = await supabase
+      const { data: memberData, error: memberError } = await supabase
         .from('members')
         .insert({
           team_id: inviteInfo.teamId,
@@ -148,6 +134,8 @@ export default function JoinTeamPage() {
           status: 'active',
           display_name: user.user_metadata?.full_name || user.email || null,
         })
+        .select('id')
+        .single()
 
       if (memberError) throw memberError
 
@@ -162,11 +150,47 @@ export default function JoinTeamPage() {
       // Refresh teams so the context knows about the new team
       await refreshTeams()
 
-      setPageState('joined')
+      // Save member ID for position selection
+      setNewMemberId(memberData.id)
+
+      // Go to position selection step
+      setPageState('position_select')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to join team')
       setJoining(false)
     }
+  }
+
+  const handleSavePositions = async () => {
+    if (!newMemberId) return
+
+    setSavingPosition(true)
+
+    try {
+      const updates: Record<string, string | null> = {
+        primary_position: primaryPosition || null,
+        secondary_position: secondaryPosition || null,
+      }
+
+      const { error } = await supabase
+        .from('members')
+        .update(updates)
+        .eq('id', newMemberId)
+
+      if (error) throw error
+
+      setPageState('joined')
+    } catch (err) {
+      // Don't block the flow — positions can be set later
+      console.error('Error saving positions:', err)
+      setPageState('joined')
+    } finally {
+      setSavingPosition(false)
+    }
+  }
+
+  const handleSkipPositions = () => {
+    setPageState('joined')
   }
 
   // Loading state
@@ -204,7 +228,85 @@ export default function JoinTeamPage() {
     )
   }
 
-  // Success state
+  // Position selection step (after joining)
+  if (pageState === 'position_select') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <div className="p-8">
+            <div className="text-center mb-6">
+              <div className="bg-green-100 rounded-full p-3 mb-4 inline-flex">
+                <Check className="w-6 h-6 text-green-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-1">You're in!</h2>
+              <p className="text-gray-600 text-sm">
+                Welcome to <strong>{inviteInfo?.teamName}</strong>. Where do you like to play?
+              </p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Primary Position
+                </label>
+                <select
+                  value={primaryPosition}
+                  onChange={(e) => setPrimaryPosition(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select position...</option>
+                  {POSITION_OPTIONS.map((pos) => (
+                    <option key={pos.value} value={pos.value}>
+                      {pos.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Secondary Position (optional)
+                </label>
+                <select
+                  value={secondaryPosition}
+                  onChange={(e) => setSecondaryPosition(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select position...</option>
+                  {POSITION_OPTIONS.filter((p) => p.value !== primaryPosition).map((pos) => (
+                    <option key={pos.value} value={pos.value}>
+                      {pos.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Button
+                onClick={handleSavePositions}
+                variant="primary"
+                fullWidth
+                loading={savingPosition}
+                disabled={!primaryPosition}
+              >
+                Save & Continue
+              </Button>
+              <Button
+                onClick={handleSkipPositions}
+                variant="outline"
+                fullWidth
+              >
+                Skip for now
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  // Success state (final)
   if (pageState === 'joined') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
@@ -257,7 +359,7 @@ export default function JoinTeamPage() {
     )
   }
 
-  // Valid invite state
+  // Valid invite state — confirm join
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">

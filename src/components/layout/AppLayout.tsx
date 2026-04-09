@@ -10,19 +10,21 @@ export function AppLayout() {
   const { user } = useAuth()
   const { currentTeam, currentMember } = useTeam()
 
-  const getRoleBadgeInfo = (role: string | undefined) => {
+  const getRoleBadgeInfo = () => {
+    const role = currentMember?.role
+    const isPlaying = currentMember?.is_playing ?? true
     switch (role) {
       case 'admin':
-        return { icon: Shield, variant: 'danger', label: 'Admin · Coach · Player' }
+        return { icon: Shield, variant: 'danger', label: isPlaying ? 'Admin · Coach · Player' : 'Admin · Coach' }
       case 'coach':
-        return { icon: Users, variant: 'warning', label: 'Coach · Player' }
+        return { icon: Users, variant: 'warning', label: isPlaying ? 'Player-Coach' : 'Coach' }
       case 'player':
       default:
         return { icon: User, variant: 'info', label: 'Player' }
     }
   }
 
-  const roleInfo = getRoleBadgeInfo(currentMember?.role)
+  const roleInfo = getRoleBadgeInfo()
   const RoleIcon = roleInfo.icon
 
   return (

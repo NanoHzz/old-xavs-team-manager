@@ -35,20 +35,26 @@ function getRoleBadgeVariant(role: string): 'default' | 'success' | 'warning' | 
   }
 }
 
-function getRoleLabel(role: string): string {
+function getRoleLabel(member: Member): string {
+  const role = member.role
+  const isPlaying = member.is_playing
+  if (role === 'admin' && isPlaying) return 'Admin · Player'
+  if (role === 'coach' && isPlaying) return 'Player-Coach'
   return role.charAt(0).toUpperCase() + role.slice(1)
 }
 
 export default function SquadPage() {
   const { members, currentTeam, loading } = useTeam()
 
-  // Filter active members and sort by role (admins/coaches first, then players)
+  // Filter active members
   const activeMembers = members.filter(m => m.status === 'active')
 
-  const coachesAndAdmins = activeMembers.filter(m => m.role === 'admin' || m.role === 'coach')
-  const players = activeMembers.filter(m => m.role === 'player')
+  // Non-playing coaches/admins shown in a separate section
+  const nonPlayingStaff = activeMembers.filter(m => (m.role === 'admin' || m.role === 'coach') && !m.is_playing)
+  // All playing members: regular players + playing coaches/admins
+  const players = activeMembers.filter(m => m.role === 'player' || m.is_playing)
 
-  const sortedMembers = [...coachesAndAdmins, ...players]
+  const sortedMembers = [...nonPlayingStaff, ...players]
 
   const getMemberName = (member: Member): string => {
     return member.display_name || member.guest_name || 'Unknown'
@@ -106,7 +112,7 @@ export default function SquadPage() {
                     {/* Role Badge and Guest Badge */}
                     <div className="flex items-center gap-2 mb-2">
                       <Badge variant={getRoleBadgeVariant(member.role)}>
-                        {getRoleLabel(member.role)}
+                        {getRoleLabel(member)}
                       </Badge>
                       {member.is_guest && (
                         <Badge variant="warning">Guest</Badge>

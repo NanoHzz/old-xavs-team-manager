@@ -182,6 +182,7 @@ export type Database = {
           primary_position: string | null
           secondary_position: string | null
           third_position: string | null
+          is_playing: boolean
           joined_at: string
         }
         Insert: {
@@ -197,6 +198,7 @@ export type Database = {
           primary_position?: string | null
           secondary_position?: string | null
           third_position?: string | null
+          is_playing?: boolean
           joined_at?: string
         }
         Update: {
@@ -212,6 +214,7 @@ export type Database = {
           primary_position?: string | null
           secondary_position?: string | null
           third_position?: string | null
+          is_playing?: boolean
           joined_at?: string
         }
         Relationships: []

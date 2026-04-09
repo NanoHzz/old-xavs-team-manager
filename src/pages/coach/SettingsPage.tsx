@@ -38,6 +38,7 @@ export default function SettingsPage() {
   })
 
   const [memberRoles, setMemberRoles] = useState<Record<string, 'admin' | 'coach' | 'player'>>({})
+  const [memberPlayingStatus, setMemberPlayingStatus] = useState<Record<string, boolean>>({})
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -345,7 +346,9 @@ export default function SettingsPage() {
     const newRole = memberRoles[memberId]
     if (!newRole) return
 
-    if (!confirm(`Update member role to ${newRole}?`)) return
+    const isPlaying = newRole === 'player' ? true : (memberPlayingStatus[memberId] ?? true)
+
+    if (!confirm(`Update member role to ${newRole}${isPlaying && newRole !== 'player' ? ' (playing)' : ''}?`)) return
 
     setSaving(true)
     setError(null)
@@ -353,11 +356,12 @@ export default function SettingsPage() {
     try {
       const { error } = await supabase
         .from('members')
-        .update({ role: newRole })
+        .update({ role: newRole, is_playing: isPlaying })
         .eq('id', memberId)
 
       if (error) throw error
       setEditingMemberId(null)
+      setMemberPlayingStatus({})
       setSuccess('Member role updated')
       setTimeout(() => setSuccess(null), 3000)
       await fetchData()
@@ -741,6 +745,9 @@ export default function SettingsPage() {
                         <Badge variant={getRoleBadgeVariant(member.role)}>
                           {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
                         </Badge>
+                        {member.is_playing && (member.role === 'coach' || member.role === 'admin') && (
+                          <Badge variant="success">Playing</Badge>
+                        )}
                         <span className="text-xs text-gray-500">
                           Joined {format(new Date(member.joined_at), 'MMM d, yyyy')}
                         </span>
@@ -748,40 +755,60 @@ export default function SettingsPage() {
                     </div>
 
                     {editingMemberId === member.id ? (
-                      <div className="flex items-center gap-2 ml-2">
-                        <select
-                          value={memberRoles[member.id] || 'player'}
-                          onChange={e =>
-                            setMemberRoles({
-                              ...memberRoles,
-                              [member.id]: e.target.value as
-                                | 'admin'
-                                | 'coach'
-                                | 'player',
-                            })
-                          }
-                          className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="player">Player</option>
-                          <option value="coach">Coach</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => handleUpdateMemberRole(member.id)}
-                          disabled={saving}
-                          loading={saving}
-                        >
-                          Save
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setEditingMemberId(null)}
-                        >
-                          Cancel
-                        </Button>
+                      <div className="flex flex-col gap-2 ml-2">
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={memberRoles[member.id] || 'player'}
+                            onChange={e =>
+                              setMemberRoles({
+                                ...memberRoles,
+                                [member.id]: e.target.value as
+                                  | 'admin'
+                                  | 'coach'
+                                  | 'player',
+                              })
+                            }
+                            className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="player">Player</option>
+                            <option value="coach">Coach</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                          {(memberRoles[member.id] === 'coach' || memberRoles[member.id] === 'admin') && (
+                            <label className="flex items-center gap-1 text-xs text-gray-700 cursor-pointer whitespace-nowrap">
+                              <input
+                                type="checkbox"
+                                checked={memberPlayingStatus[member.id] ?? member.is_playing}
+                                onChange={e =>
+                                  setMemberPlayingStatus({
+                                    ...memberPlayingStatus,
+                                    [member.id]: e.target.checked,
+                                  })
+                                }
+                                className="rounded border-gray-300"
+                              />
+                              Playing
+                            </label>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleUpdateMemberRole(member.id)}
+                            disabled={saving}
+                            loading={saving}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditingMemberId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <div className="flex gap-2 ml-2">
