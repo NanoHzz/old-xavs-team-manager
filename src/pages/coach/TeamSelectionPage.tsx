@@ -12,9 +12,12 @@ import type {
   Position,
   PositionPreference,
   PlayerRating,
+  PlayerCategoryRating,
 } from '../../types'
+import { generateTeamSelection, getSelectionMode } from '../../services/aiTeamSelection'
+import type { PlayerSelectionData, CategoryRatings } from '../../services/aiTeamSelection'
 import { format } from 'date-fns'
-import { ChevronDown, Lock, Trash2, Users } from 'lucide-react'
+import { ChevronDown, Lock, Trash2, Users, Star, Plus } from 'lucide-react'
 
 export default function TeamSelectionPage() {
   const { currentTeam, members, currentMember } = useTeam()
@@ -33,8 +36,16 @@ export default function TeamSelectionPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [showPlayerPicker, setShowPlayerPicker] = useState<string | null>(null)
   const [lockedPositions, setLockedPositions] = useState<Set<string>>(new Set())
+  const [categoryRatings, setCategoryRatings] = useState<Record<string, PlayerCategoryRating[]>>({})
+  const [showExternalPlayerForm, setShowExternalPlayerForm] = useState(false)
+  const [externalPlayerForm, setExternalPlayerForm] = useState({
+    name: '',
+    position: 'Backs',
+    rating: 5,
+  })
 
   // Fetch initial data — re-run when members loads from context
   useEffect(() => {
@@ -118,6 +129,26 @@ export default function TeamSelectionPage() {
         {} as Record<string, PlayerRating>
       )
       setPlayerRatings(ratingsMap)
+
+      // Fetch category ratings for all members
+      const { data: catRatingsData, error: catRatingsError } = await supabase
+        .from('player_category_ratings')
+        .select('*')
+        .in(
+          'member_id',
+          members.map(m => m.id)
+        )
+
+      if (catRatingsError) throw catRatingsError
+      const catRatingsMap = (catRatingsData || []).reduce(
+        (acc, r) => {
+          if (!acc[r.member_id]) acc[r.member_id] = []
+          acc[r.member_id].push(r)
+          return acc
+        },
+        {} as Record<string, PlayerCategoryRating[]>
+      )
+      setCategoryRatings(catRatingsMap)
     } catch (err) {
       console.error('Error fetching data:', err)
       setError('Failed to load team data')
@@ -282,11 +313,101 @@ export default function TeamSelectionPage() {
     }
   }
 
-  const handleAutoFill = async () => {
+  const handleAIGenerate = async () => {
     if (!selectedRound || !currentTeam || !currentMember) return
 
     setSaving(true)
+    setError(null)
+    setSuccessMessage(null)
+
     try {
+      // Build PlayerSelectionData for available players
+      const availablePlayers = members
+        .filter(m => {
+          if (m.status !== 'active' || assignedMemberIds.has(m.id)) return false
+          const avail = playerAvailability[m.id]?.status
+          return avail !== 'unavailable'
+        })
+
+      // Fetch recent games played (count in last 5 rounds)
+      const { data: recentRounds } = await supabase
+        .from('rounds')
+        .select('id')
+        .eq('season_id', selectedRound.season_id)
+        .lt('round_number', selectedRound.round_number)
+        .order('round_number', { ascending: false })
+        .limit(5)
+
+      const recentRoundIds = (recentRounds || []).map(r => r.id)
+
+      // Batch fetch recent game counts: get team_selections for recent rounds, then count players
+      let recentGameCounts: Record<string, number> = {}
+      if (recentRoundIds.length > 0) {
+        const { data: recentSelections } = await supabase
+          .from('team_selections')
+          .select('id')
+          .in('round_id', recentRoundIds)
+
+        const recentSelectionIds = (recentSelections || []).map(s => s.id)
+
+        if (recentSelectionIds.length > 0) {
+          const { data: recentPlayers } = await supabase
+            .from('selection_players')
+            .select('member_id')
+            .in('team_selection_id', recentSelectionIds)
+
+          for (const sp of recentPlayers || []) {
+            recentGameCounts[sp.member_id] = (recentGameCounts[sp.member_id] || 0) + 1
+          }
+        }
+      }
+
+      const playerSelectionDataList: PlayerSelectionData[] = []
+
+      for (const member of availablePlayers) {
+        const rating = playerRatings[member.id]
+        const catRatings = categoryRatings[member.id] || []
+
+        // Build CategoryRatings from player_category_ratings
+        const categoryRatingsMap: CategoryRatings = {
+          Backs: 5,
+          Midfield: 5,
+          Forward: 5,
+          Ruck: 5,
+        }
+
+        catRatings.forEach((cr: { category: keyof CategoryRatings; rating: number }) => {
+          categoryRatingsMap[cr.category] = cr.rating
+        })
+
+        playerSelectionDataList.push({
+          member,
+          availability: (playerAvailability[member.id]?.status || 'maybe') as 'available' | 'maybe',
+          overallRating: rating?.overall || member.external_rating || 5,
+          fitnessRating: rating?.fitness || 5,
+          formRating: rating?.form || 5,
+          categoryRatings: categoryRatingsMap,
+          recentGamesPlayed: recentGameCounts[member.id] || 0,
+          totalGamesPlayed: 0,
+        })
+      }
+
+      // Build locked positions map
+      const lockedMap = new Map<string, string>()
+      selectionPlayers.forEach(sp => {
+        if (sp.position_id && lockedPositions.has(sp.position_id)) {
+          lockedMap.set(sp.position_id, sp.member_id)
+        }
+      })
+
+      // Call AI generation
+      const aiResults = generateTeamSelection(
+        playerSelectionDataList,
+        positions,
+        selectedRound.opposition_rating,
+        lockedMap
+      )
+
       // Create selection if needed
       let selection = teamSelection
       if (!selection) {
@@ -304,81 +425,51 @@ export default function TeamSelectionPage() {
         setTeamSelection(selection)
       }
 
-      // Get unassigned positions
-      const assignedPosIds = new Set(selectionPlayers.map(sp => sp.position_id))
-      const unassignedPositions = positions.filter(p => !assignedPosIds.has(p.id))
+      // Clear existing non-locked selection players
+      const nonLockedIds = selectionPlayers
+        .filter(sp => !lockedPositions.has(sp.position_id || ''))
+        .map(sp => sp.id)
 
-      // Get unassigned active players, prioritizing available ones, excluding unavailable
-      const unassignedPlayers = members
-        .filter(m => {
-          if (m.status !== 'active' || assignedMemberIds.has(m.id)) return false
-          const avail = playerAvailability[m.id]?.status
-          // Only include available and maybe players, exclude unavailable
-          return avail !== 'unavailable'
-        })
-        .sort((a, b) => {
-          const statusOrder: Record<string, number> = { available: 0, maybe: 1 }
-          const aStatus = playerAvailability[a.id]?.status
-          const bStatus = playerAvailability[b.id]?.status
-          const aOrder = aStatus ? (statusOrder[aStatus] ?? 1) : 1
-          const bOrder = bStatus ? (statusOrder[bStatus] ?? 1) : 1
-          return aOrder - bOrder
-        })
-
-      // For each unassigned position, find best matching player
-      const newAssignments: Array<{
-        team_selection_id: string
-        member_id: string
-        position_id: string
-        selection_type: 'on_field' | 'bench' | 'emergency' | 'omitted'
-      }> = []
-      for (const position of unassignedPositions) {
-        // Get players who prefer this position, sorted by rating
-        const matchingPlayers = unassignedPlayers
-          .filter(p => {
-            const prefs = positionPreferences.filter(pr => pr.member_id === p.id)
-            return prefs.some(pr => pr.position_id === position.id)
-          })
-          .sort(
-            (a, b) =>
-              (playerRatings[b.id]?.overall || 0) - (playerRatings[a.id]?.overall || 0)
-          )
-
-        // If no preference match, try highest rated available player
-        let playerToAssign = matchingPlayers[0]
-        if (!playerToAssign && unassignedPlayers.length > 0) {
-          playerToAssign = unassignedPlayers.sort(
-            (a, b) =>
-              (playerRatings[b.id]?.overall || 0) - (playerRatings[a.id]?.overall || 0)
-          )[0]
-        }
-
-        if (playerToAssign) {
-          newAssignments.push({
-            team_selection_id: selection.id,
-            member_id: playerToAssign.id,
-            position_id: position.id,
-            selection_type: 'on_field' as const,
-          })
-
-          // Remove from unassigned list
-          unassignedPlayers.splice(unassignedPlayers.indexOf(playerToAssign), 1)
-        }
-      }
-
-      // Insert all new assignments
-      if (newAssignments.length > 0) {
+      if (nonLockedIds.length > 0) {
         const { error } = await supabase
           .from('selection_players')
-          .insert(newAssignments)
+          .delete()
+          .in('id', nonLockedIds)
 
         if (error) throw error
       }
 
+      // Insert AI results
+      if (aiResults.length > 0) {
+        const inserts = aiResults.map((result, idx) => ({
+          team_selection_id: selection.id,
+          member_id: result.memberId,
+          position_id: result.positionId,
+          selection_type: result.selectionType,
+          sort_order: idx,
+        }))
+
+        const { error } = await supabase
+          .from('selection_players')
+          .insert(inserts)
+
+        if (error) throw error
+      }
+
+      const mode = getSelectionMode(selectedRound.opposition_rating)
+      const oppositionStr = selectedRound.opposition_rating
+        ? `${selectedRound.opposition_rating}/5`
+        : 'N/A'
+
+      setSuccessMessage(
+        `AI generated team in ${mode} mode based on opposition rating ${oppositionStr}`
+      )
+
+      // Refresh data
       await fetchRoundData()
     } catch (err) {
-      console.error('Error auto-filling:', err)
-      setError('Failed to auto-fill team')
+      console.error('Error generating team with AI:', err)
+      setError('Failed to generate team with AI')
     } finally {
       setSaving(false)
     }
@@ -400,6 +491,68 @@ export default function TeamSelectionPage() {
     } catch (err) {
       console.error('Error clearing assignments:', err)
       setError('Failed to clear assignments')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAddExternalPlayer = async () => {
+    if (!currentTeam || !currentMember || !selectedRound || !externalPlayerForm.name.trim()) {
+      setError('Please fill in all required fields')
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+
+    try {
+      // Map position preference to primary_position
+      const positionMap: Record<string, string> = {
+        'Backs': 'back_pocket',
+        'Midfield': 'midfielder',
+        'Forward': 'forward',
+        'Ruck': 'ruck',
+      }
+
+      // Create member record
+      const { data: memberData, error: memberError } = await supabase
+        .from('members')
+        .insert({
+          user_id: currentMember.user_id, // Use coach's user_id as placeholder
+          team_id: currentTeam.id,
+          is_guest: true,
+          is_external: true,
+          guest_name: externalPlayerForm.name,
+          external_rating: externalPlayerForm.rating,
+          primary_position: positionMap[externalPlayerForm.position],
+          status: 'active',
+        })
+        .select()
+        .single()
+
+      if (memberError) throw memberError
+
+      // Create player availability record for this round
+      const { error: availError } = await supabase
+        .from('player_availability')
+        .insert({
+          member_id: memberData.id,
+          round_id: selectedRound.id,
+          status: 'available',
+        })
+
+      if (availError) throw availError
+
+      setSuccessMessage(`External player "${externalPlayerForm.name}" added for this round`)
+      setShowExternalPlayerForm(false)
+      setExternalPlayerForm({ name: '', position: 'Backs', rating: 5 })
+
+      // Refresh data
+      await fetchData()
+      await fetchRoundData()
+    } catch (err) {
+      console.error('Error adding external player:', err)
+      setError('Failed to add external player')
     } finally {
       setSaving(false)
     }
@@ -487,8 +640,20 @@ export default function TeamSelectionPage() {
         </div>
       )}
 
-      {/* Round Selector */}
-      <div className="mb-6">
+      {successMessage && (
+        <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg flex justify-between items-center">
+          <span>{successMessage}</span>
+          <button
+            onClick={() => setSuccessMessage(null)}
+            className="text-green-700 hover:text-green-900"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Round Selector with Opposition Rating */}
+      <div className="mb-6 flex items-center gap-4">
         <div className="relative inline-block w-full max-w-xs">
           <select
             value={selectedRound.id}
@@ -507,6 +672,21 @@ export default function TeamSelectionPage() {
           </select>
           <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" />
         </div>
+        {selectedRound.opposition_rating && (
+          <div className="flex items-center gap-1 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">
+            <span className="text-sm font-medium text-gray-700">Opposition:</span>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star
+                key={i}
+                className={`w-4 h-4 ${
+                  i < selectedRound.opposition_rating!
+                    ? 'fill-yellow-400 text-yellow-400'
+                    : 'text-gray-300'
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Availability Summary */}
@@ -573,12 +753,109 @@ export default function TeamSelectionPage() {
                       </div>
                     </div>
                     <Badge variant="success">
-                      {playerRatings[p.id]?.overall || '-'}
+                      {playerRatings[p.id]?.overall || (p.external_rating ? p.external_rating : '-')}
                     </Badge>
                   </div>
                 )
               })
 
+            )}
+          </div>
+
+          {/* Add External Player Form */}
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            {!showExternalPlayerForm ? (
+              <button
+                onClick={() => setShowExternalPlayerForm(true)}
+                className="w-full flex items-center justify-center gap-2 py-2 text-blue-600 hover:bg-blue-50 rounded text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" />
+                Add External Player
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    value={externalPlayerForm.name}
+                    onChange={e =>
+                      setExternalPlayerForm({
+                        ...externalPlayerForm,
+                        name: e.target.value,
+                      })
+                    }
+                    placeholder="Player name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                    disabled={saving}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Position
+                  </label>
+                  <select
+                    value={externalPlayerForm.position}
+                    onChange={e =>
+                      setExternalPlayerForm({
+                        ...externalPlayerForm,
+                        position: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                    disabled={saving}
+                  >
+                    <option value="Backs">Backs</option>
+                    <option value="Midfield">Midfield</option>
+                    <option value="Forward">Forward</option>
+                    <option value="Ruck">Ruck</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Rating: {externalPlayerForm.rating}/10
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={externalPlayerForm.rating}
+                    onChange={e =>
+                      setExternalPlayerForm({
+                        ...externalPlayerForm,
+                        rating: parseInt(e.target.value),
+                      })
+                    }
+                    className="w-full"
+                    disabled={saving}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleAddExternalPlayer}
+                    disabled={saving || !externalPlayerForm.name.trim()}
+                    loading={saving}
+                    className="flex-1"
+                  >
+                    Add
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setShowExternalPlayerForm(false)
+                      setExternalPlayerForm({ name: '', position: 'Backs', rating: 5 })
+                    }}
+                    disabled={saving}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         </Card>
@@ -712,12 +989,12 @@ export default function TeamSelectionPage() {
         </Button>
         <Button
           variant="secondary"
-          onClick={handleAutoFill}
+          onClick={handleAIGenerate}
           disabled={saving}
           loading={saving}
         >
           <Users className="w-4 h-4" />
-          Auto-fill
+          AI Generate Team
         </Button>
         <Button
           variant="secondary"

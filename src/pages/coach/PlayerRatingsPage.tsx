@@ -15,6 +15,7 @@ interface PlayerWithRatings {
   fitnessRating: number | null
   formRating: number | null
   positionRatings: PositionRating[]
+  categoryRatings: Record<string, number>
 }
 
 type SortField = 'name' | 'overall'
@@ -35,6 +36,9 @@ export default function PlayerRatingsPage() {
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null)
   const [ratings, setRatings] = useState<
     Record<string, { overall: number; fitness: number; form: number }>
+  >({})
+  const [categoryRatings, setCategoryRatings] = useState<
+    Record<string, Record<string, number>>
   >({})
 
   // Fetch initial data
@@ -107,6 +111,44 @@ export default function PlayerRatingsPage() {
 
       if (positionsError) throw positionsError
       setPositions(positionsData || [])
+
+      // Fetch category ratings
+      const { data: catRatingsData, error: catRatingsError } = await supabase
+        .from('player_category_ratings')
+        .select('*')
+        .in(
+          'member_id',
+          members.map(m => m.id)
+        )
+
+      if (catRatingsError) throw catRatingsError
+
+      const initialCategoryRatings: Record<string, Record<string, number>> = {}
+
+      // Initialize all members with default category ratings
+      members.forEach(m => {
+        initialCategoryRatings[m.id] = {
+          Backs: 5,
+          Midfield: 5,
+          Forward: 5,
+          Ruck: 5,
+        }
+      })
+
+      // Override with fetched data
+      ;(catRatingsData || []).forEach(cr => {
+        if (!initialCategoryRatings[cr.member_id]) {
+          initialCategoryRatings[cr.member_id] = {
+            Backs: 5,
+            Midfield: 5,
+            Forward: 5,
+            Ruck: 5,
+          }
+        }
+        initialCategoryRatings[cr.member_id][cr.category] = cr.rating
+      })
+
+      setCategoryRatings(initialCategoryRatings)
     } catch (err) {
       console.error('Error fetching data:', err)
       setError('Failed to load player data')
@@ -120,6 +162,12 @@ export default function PlayerRatingsPage() {
       const rating = playerRatings.get(m.id)
       const posRatings = positionRatings.filter(pr => pr.player_rating_id === rating?.id)
       const memberRatings = ratings[m.id] || { overall: 5, fitness: 5, form: 5 }
+      const memberCategoryRatings = categoryRatings[m.id] || {
+        Backs: 5,
+        Midfield: 5,
+        Forward: 5,
+        Ruck: 5,
+      }
 
       return {
         memberId: m.id,
@@ -129,6 +177,7 @@ export default function PlayerRatingsPage() {
         fitnessRating: memberRatings.fitness,
         formRating: memberRatings.form,
         positionRatings: posRatings,
+        categoryRatings: memberCategoryRatings,
       }
     })
 
@@ -150,7 +199,7 @@ export default function PlayerRatingsPage() {
     })
 
     return filtered
-  }, [members, playerRatings, positionRatings, ratings, sortBy, filterBy])
+  }, [members, playerRatings, positionRatings, ratings, categoryRatings, sortBy, filterBy])
 
   const handleRatingChange = (
     memberId: string,
@@ -162,6 +211,20 @@ export default function PlayerRatingsPage() {
       [memberId]: {
         ...prev[memberId],
         [field]: value,
+      },
+    }))
+  }
+
+  const handleCategoryRatingChange = (
+    memberId: string,
+    category: string,
+    value: number
+  ) => {
+    setCategoryRatings(prev => ({
+      ...prev,
+      [memberId]: {
+        ...prev[memberId],
+        [category]: value,
       },
     }))
   }
@@ -218,6 +281,24 @@ export default function PlayerRatingsPage() {
           })
           .eq('id', (update as any).id)
         if (error) throw error
+      }
+
+      // Save category ratings using upsert
+      for (const member of members) {
+        const cats = categoryRatings[member.id]
+        if (!cats) continue
+        for (const [category, rating] of Object.entries(cats)) {
+          const { error } = await supabase.from('player_category_ratings').upsert(
+            {
+              member_id: member.id,
+              rated_by: currentMember.id,
+              category: category as 'Backs' | 'Midfield' | 'Forward' | 'Ruck',
+              rating,
+            },
+            { onConflict: 'member_id,category' }
+          )
+          if (error) throw error
+        }
       }
 
       await fetchData()
@@ -338,6 +419,21 @@ export default function PlayerRatingsPage() {
                     </div>
                   </div>
 
+                  <div className="flex gap-1">
+                    <Badge variant="default" className="text-xs">
+                      B {player.categoryRatings.Backs}
+                    </Badge>
+                    <Badge variant="default" className="text-xs">
+                      M {player.categoryRatings.Midfield}
+                    </Badge>
+                    <Badge variant="default" className="text-xs">
+                      F {player.categoryRatings.Forward}
+                    </Badge>
+                    <Badge variant="default" className="text-xs">
+                      R {player.categoryRatings.Ruck}
+                    </Badge>
+                  </div>
+
                   {expandedPlayer === player.memberId ? (
                     <ChevronUp className="w-5 h-5 text-gray-400" />
                   ) : (
@@ -439,6 +535,138 @@ export default function PlayerRatingsPage() {
                     <div className="flex justify-between text-xs text-gray-500 mt-1">
                       <span>Poor</span>
                       <span>Excellent</span>
+                    </div>
+                  </div>
+
+                  {/* Position Group Ratings */}
+                  <div className="pt-4 border-t border-gray-300">
+                    <h4 className="text-sm font-semibold mb-4">
+                      Position Group Ratings
+                    </h4>
+                    <div className="space-y-4">
+                      {/* Backs Rating */}
+                      <div>
+                        <div className="flex justify-between mb-2">
+                          <label className="text-sm font-medium text-gray-700">
+                            Backs
+                          </label>
+                          <span className="text-sm font-bold text-blue-600">
+                            {player.categoryRatings.Backs}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          step="0.5"
+                          value={player.categoryRatings.Backs || 5}
+                          onChange={e =>
+                            handleCategoryRatingChange(
+                              player.memberId,
+                              'Backs',
+                              parseFloat(e.target.value)
+                            )
+                          }
+                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>Poor</span>
+                          <span>Excellent</span>
+                        </div>
+                      </div>
+
+                      {/* Midfield Rating */}
+                      <div>
+                        <div className="flex justify-between mb-2">
+                          <label className="text-sm font-medium text-gray-700">
+                            Midfield
+                          </label>
+                          <span className="text-sm font-bold text-green-600">
+                            {player.categoryRatings.Midfield}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          step="0.5"
+                          value={player.categoryRatings.Midfield || 5}
+                          onChange={e =>
+                            handleCategoryRatingChange(
+                              player.memberId,
+                              'Midfield',
+                              parseFloat(e.target.value)
+                            )
+                          }
+                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>Poor</span>
+                          <span>Excellent</span>
+                        </div>
+                      </div>
+
+                      {/* Forward Rating */}
+                      <div>
+                        <div className="flex justify-between mb-2">
+                          <label className="text-sm font-medium text-gray-700">
+                            Forward
+                          </label>
+                          <span className="text-sm font-bold text-orange-600">
+                            {player.categoryRatings.Forward}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          step="0.5"
+                          value={player.categoryRatings.Forward || 5}
+                          onChange={e =>
+                            handleCategoryRatingChange(
+                              player.memberId,
+                              'Forward',
+                              parseFloat(e.target.value)
+                            )
+                          }
+                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>Poor</span>
+                          <span>Excellent</span>
+                        </div>
+                      </div>
+
+                      {/* Ruck Rating */}
+                      <div>
+                        <div className="flex justify-between mb-2">
+                          <label className="text-sm font-medium text-gray-700">
+                            Ruck
+                          </label>
+                          <span className="text-sm font-bold text-red-600">
+                            {player.categoryRatings.Ruck}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          step="0.5"
+                          value={player.categoryRatings.Ruck || 5}
+                          onChange={e =>
+                            handleCategoryRatingChange(
+                              player.memberId,
+                              'Ruck',
+                              parseFloat(e.target.value)
+                            )
+                          }
+                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>Poor</span>
+                          <span>Excellent</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 

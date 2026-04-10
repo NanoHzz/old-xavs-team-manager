@@ -143,6 +143,7 @@ export type Database = {
           is_bye: boolean
           availability_deadline: string | null
           status: 'upcoming' | 'team_selected' | 'completed'
+          opposition_rating: number | null
         }
         Insert: {
           id?: string
@@ -154,6 +155,7 @@ export type Database = {
           is_bye?: boolean
           availability_deadline?: string | null
           status?: 'upcoming' | 'team_selected' | 'completed'
+          opposition_rating?: number | null
         }
         Update: {
           id?: string
@@ -165,6 +167,7 @@ export type Database = {
           is_bye?: boolean
           availability_deadline?: string | null
           status?: 'upcoming' | 'team_selected' | 'completed'
+          opposition_rating?: number | null
         }
         Relationships: []
       }
@@ -184,6 +187,8 @@ export type Database = {
           third_position: string | null
           is_playing: boolean
           joined_at: string
+          is_external: boolean
+          external_rating: number | null
         }
         Insert: {
           id?: string
@@ -200,6 +205,8 @@ export type Database = {
           third_position?: string | null
           is_playing?: boolean
           joined_at?: string
+          is_external?: boolean
+          external_rating?: number | null
         }
         Update: {
           id?: string
@@ -216,6 +223,8 @@ export type Database = {
           third_position?: string | null
           is_playing?: boolean
           joined_at?: string
+          is_external?: boolean
+          external_rating?: number | null
         }
         Relationships: []
       }
@@ -399,6 +408,33 @@ export type Database = {
           quarter?: number | null
           position_id?: string | null
           notes?: string | null
+        }
+        Relationships: []
+      }
+      player_category_ratings: {
+        Row: {
+          id: string
+          member_id: string
+          rated_by: string
+          category: 'Backs' | 'Midfield' | 'Forward' | 'Ruck'
+          rating: number
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          member_id: string
+          rated_by: string
+          category: 'Backs' | 'Midfield' | 'Forward' | 'Ruck'
+          rating: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          member_id?: string
+          rated_by?: string
+          category?: 'Backs' | 'Midfield' | 'Forward' | 'Ruck'
+          rating?: number
+          updated_at?: string
         }
         Relationships: []
       }

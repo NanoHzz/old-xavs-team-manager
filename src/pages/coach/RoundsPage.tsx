@@ -7,7 +7,7 @@ import { Input } from '../../components/ui/Input'
 import type { Season, Round } from '../../types'
 import { format, addDays, parse, isBefore } from 'date-fns'
 import { localDateTimeToISO, isoToLocalDateTime, formatDateTime } from '../../lib/utils'
-import { ChevronDown, ChevronUp, Plus, Trash2, Edit2, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Plus, Trash2, Edit2, X, Star } from 'lucide-react'
 
 interface RoundWithStatus extends Round {
   isEditing?: boolean
@@ -270,6 +270,7 @@ export default function RoundsPage() {
           venue: editingRound.venue,
           date_time: editingRound.date_time ? localDateTimeToISO(editingRound.date_time) : null,
           is_bye: editingRound.is_bye || false,
+          opposition_rating: editingRound.opposition_rating || null,
         })
         .eq('id', round.id)
 
@@ -842,6 +843,41 @@ export default function RoundsPage() {
                                 This is a BYE round
                               </label>
                             </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Opposition Strength</label>
+                              <div className="flex gap-1">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                  <button
+                                    key={star}
+                                    type="button"
+                                    onClick={() =>
+                                      setEditingRound({
+                                        ...editingRound,
+                                        opposition_rating: editingRound.opposition_rating === star ? null : star,
+                                      })
+                                    }
+                                    className="p-0.5"
+                                  >
+                                    <Star
+                                      className={`w-6 h-6 ${
+                                        star <= (editingRound.opposition_rating || 0)
+                                          ? 'fill-amber-400 text-amber-400'
+                                          : 'text-gray-300'
+                                      }`}
+                                    />
+                                  </button>
+                                ))}
+                                {editingRound.opposition_rating && (
+                                  <span className="text-xs text-gray-500 ml-2 self-center">
+                                    {editingRound.opposition_rating === 1 && 'Weak'}
+                                    {editingRound.opposition_rating === 2 && 'Below avg'}
+                                    {editingRound.opposition_rating === 3 && 'Average'}
+                                    {editingRound.opposition_rating === 4 && 'Strong'}
+                                    {editingRound.opposition_rating === 5 && 'Very strong'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                             <div className="flex gap-2">
                               <Button
                                 variant="primary"
@@ -881,6 +917,23 @@ export default function RoundsPage() {
                               <div>
                                 <p className="text-sm font-medium text-gray-600">Date & Time</p>
                                 <p>{formatDateTime(round.date_time)}</p>
+                              </div>
+                            )}
+                            {round.opposition_rating && (
+                              <div>
+                                <p className="text-sm font-medium text-gray-600">Opposition Strength</p>
+                                <div className="flex gap-0.5 mt-0.5">
+                                  {[1, 2, 3, 4, 5].map(star => (
+                                    <Star
+                                      key={star}
+                                      className={`w-4 h-4 ${
+                                        star <= round.opposition_rating!
+                                          ? 'fill-amber-400 text-amber-400'
+                                          : 'text-gray-300'
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
                               </div>
                             )}
                             <div className="flex gap-2 pt-4 border-t border-gray-300">

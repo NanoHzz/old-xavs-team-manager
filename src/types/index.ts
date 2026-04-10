@@ -21,6 +21,7 @@ export type TeamAnnouncement = Database['public']['Tables']['team_announcements'
 export type AnnouncementComment = Database['public']['Tables']['announcement_comments']['Row']
 export type PlayerGameStats = Database['public']['Tables']['player_game_stats']['Row']
 export type PlayerVotes = Database['public']['Tables']['player_votes']['Row']
+export type PlayerCategoryRating = Database['public']['Tables']['player_category_ratings']['Row']
 export type InviteCode = Database['public']['Tables']['invite_codes']['Row']
 
 // Insert Types
@@ -44,6 +45,7 @@ export type TeamAnnouncementInsert = Database['public']['Tables']['team_announce
 export type AnnouncementCommentInsert = Database['public']['Tables']['announcement_comments']['Insert']
 export type PlayerGameStatsInsert = Database['public']['Tables']['player_game_stats']['Insert']
 export type PlayerVotesInsert = Database['public']['Tables']['player_votes']['Insert']
+export type PlayerCategoryRatingInsert = Database['public']['Tables']['player_category_ratings']['Insert']
 export type InviteCodeInsert = Database['public']['Tables']['invite_codes']['Insert']
 
 // Update Types
@@ -63,6 +65,7 @@ export type RotationPlanUpdate = Database['public']['Tables']['rotation_plans'][
 export type GameDayRoleUpdate = Database['public']['Tables']['game_day_roles']['Update']
 export type RoleAssignmentUpdate = Database['public']['Tables']['role_assignments']['Update']
 export type NotificationUpdate = Database['public']['Tables']['notifications']['Update']
+export type PlayerCategoryRatingUpdate = Database['public']['Tables']['player_category_ratings']['Update']
 export type InviteCodeUpdate = Database['public']['Tables']['invite_codes']['Update']
 
 // Derived Types
