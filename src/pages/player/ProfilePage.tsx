@@ -9,16 +9,6 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { LogOut, Copy, Check } from 'lucide-react'
 import type { InviteCode } from '../../types'
 
-const POSITION_OPTIONS = [
-  { value: 'back_key', label: 'Back (Key)' },
-  { value: 'back_general', label: 'Back (General)' },
-  { value: 'mid_centre', label: 'Mid (Centre)' },
-  { value: 'mid_wing', label: 'Mid (Wing)' },
-  { value: 'ruck', label: 'Ruck' },
-  { value: 'forward_key', label: 'Forward (Key)' },
-  { value: 'forward_small', label: 'Forward (Small)' },
-]
-
 export default function ProfilePage() {
   const { user, signOut } = useAuth()
   const { currentTeam, teams, currentMember, setCurrentTeam } = useTeam()
@@ -31,12 +21,6 @@ export default function ProfilePage() {
   const [copyFeedback, setCopyFeedback] = useState(false)
   const [loading, setLoading] = useState(true)
   const [signingOut, setSigningOut] = useState(false)
-  const [primaryPosition, setPrimaryPosition] = useState<string | null>(null)
-  const [secondaryPosition, setSecondaryPosition] = useState<string | null>(null)
-  const [thirdPosition, setThirdPosition] = useState<string | null>(null)
-  const [savingPositions, setSavingPositions] = useState(false)
-  const [positionError, setPositionError] = useState('')
-  const [positionSaved, setPositionSaved] = useState(false)
 
   useEffect(() => {
     if (!currentMember || !currentTeam) {
@@ -49,9 +33,6 @@ export default function ProfilePage() {
       try {
         setJerseyNumber(currentMember.jersey_number)
         setJerseyInput(currentMember.jersey_number?.toString() || '')
-        setPrimaryPosition(currentMember.primary_position || null)
-        setSecondaryPosition(currentMember.secondary_position || null)
-        setThirdPosition(currentMember.third_position || null)
 
         // Fetch team invite code
         const { data: inviteData } = await supabase
@@ -114,30 +95,6 @@ export default function ProfilePage() {
       setTimeout(() => setCopyFeedback(false), 2000)
     } catch (error) {
       console.error('Failed to copy:', error)
-    }
-  }
-
-  const handlePositionsSave = async () => {
-    if (!currentMember) return
-
-    setPositionError('')
-    setSavingPositions(true)
-    try {
-      const { error } = await supabase
-        .from('members')
-        .update({
-          primary_position: primaryPosition,
-          secondary_position: secondaryPosition,
-          third_position: thirdPosition,
-        })
-        .eq('id', currentMember.id)
-
-      if (error) throw error
-
-      setPositionSaved(true)
-      setTimeout(() => setPositionSaved(false), 2000)
-    } finally {
-      setSavingPositions(false)
     }
   }
 
@@ -225,85 +182,6 @@ export default function ProfilePage() {
               size="sm"
             >
               Save Jersey Number
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {/* Position Preferences */}
-      {currentMember && (
-        <Card title="Position Preferences">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Primary Position
-              </label>
-              <select
-                value={primaryPosition || ''}
-                onChange={e => setPrimaryPosition(e.target.value || null)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select...</option>
-                {POSITION_OPTIONS.map(pos => (
-                  <option key={pos.value} value={pos.value}>
-                    {pos.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Secondary Position
-              </label>
-              <select
-                value={secondaryPosition || ''}
-                onChange={e => setSecondaryPosition(e.target.value || null)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select...</option>
-                {POSITION_OPTIONS.filter(pos => pos.value !== primaryPosition).map(pos => (
-                  <option key={pos.value} value={pos.value}>
-                    {pos.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Third Position
-              </label>
-              <select
-                value={thirdPosition || ''}
-                onChange={e => setThirdPosition(e.target.value || null)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select...</option>
-                {POSITION_OPTIONS.filter(pos => pos.value !== primaryPosition && pos.value !== secondaryPosition).map(pos => (
-                  <option key={pos.value} value={pos.value}>
-                    {pos.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {positionError && (
-              <p className="text-sm text-red-600">{positionError}</p>
-            )}
-
-            {positionSaved && (
-              <p className="text-sm text-green-600">Positions saved!</p>
-            )}
-
-            <Button
-              onClick={handlePositionsSave}
-              loading={savingPositions}
-              fullWidth
-              variant="primary"
-              size="sm"
-            >
-              Save Positions
             </Button>
           </div>
         </Card>

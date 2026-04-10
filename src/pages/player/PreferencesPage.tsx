@@ -113,6 +113,17 @@ export default function PreferencesPage() {
     )
   }
 
+  /** Map a position's category to the member position enum value used by the AI algorithm */
+  const categoryToMemberPosition = (category: string | null): string | null => {
+    switch (category) {
+      case 'Defence': return 'back_general'
+      case 'Midfield': return 'mid_centre'
+      case 'Forward': return 'forward_general'
+      case 'Ruck': return 'ruck'
+      default: return null
+    }
+  }
+
   const handleSave = async () => {
     if (!currentMember) return
 
@@ -140,6 +151,29 @@ export default function PreferencesPage() {
 
         if (insertError) throw insertError
       }
+
+      // Also sync to members table (primary_position, secondary_position, third_position)
+      // so the AI team selection algorithm can read them
+      const sortedPrefs = Array.from(selectedPreferences.entries())
+        .sort(([, a], [, b]) => a - b)
+
+      const getMemberPosition = (index: number): string | null => {
+        if (index >= sortedPrefs.length) return null
+        const [posId] = sortedPrefs[index]
+        const pos = positions.find(p => p.id === posId)
+        return categoryToMemberPosition(pos?.category || null)
+      }
+
+      const { error: memberError } = await supabase
+        .from('members')
+        .update({
+          primary_position: getMemberPosition(0),
+          secondary_position: getMemberPosition(1),
+          third_position: getMemberPosition(2),
+        })
+        .eq('id', currentMember.id)
+
+      if (memberError) throw memberError
     } finally {
       setSaving(false)
     }
