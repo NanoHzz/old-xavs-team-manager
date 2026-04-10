@@ -8,7 +8,7 @@ import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { AflOval } from '../../components/ui/AflOval'
 import { formatDateTime } from '../../lib/utils'
-import { ArrowLeft, Users, BarChart3, Award, CheckCircle, ClipboardList } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Users, BarChart3, Award, CheckCircle, ClipboardList } from 'lucide-react'
 import type { Round } from '../../types'
 
 interface TeamSheetPlayer {
@@ -100,6 +100,9 @@ export default function MatchCentrePage() {
   const [savingRoles, setSavingRoles] = useState(false)
   const [rolesSaved, setRolesSaved] = useState(false)
 
+  // Round navigation
+  const [allRounds, setAllRounds] = useState<Round[]>([])
+
   const isCoachOrAdmin = currentMember?.role === 'coach' || currentMember?.role === 'admin'
 
   const tabs = [
@@ -128,6 +131,16 @@ export default function MatchCentrePage() {
 
         if (roundError) throw roundError
         setRound(roundData)
+
+        // Fetch all rounds in this season for prev/next navigation
+        if (roundData.season_id) {
+          const { data: seasonRounds } = await supabase
+            .from('rounds')
+            .select('*')
+            .eq('season_id', roundData.season_id)
+            .order('round_number', { ascending: true })
+          setAllRounds(seasonRounds || [])
+        }
 
         // 2. Fetch team selection and selection players
         const { data: teamSelectionData, error: tsError } = await supabase
@@ -458,21 +471,45 @@ export default function MatchCentrePage() {
 
   return (
     <div className="p-4 pb-20 space-y-4">
-      {/* Back button + Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => navigate('/')}
-          className="p-2 -ml-2 rounded-lg hover:bg-gray-100"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-xl font-bold">Match Centre</h1>
-          <p className="text-sm text-gray-500">
-            Round {round.round_number} vs {round.opposition || 'TBA'}
-          </p>
-        </div>
-      </div>
+      {/* Back button + Header with round navigation */}
+      {(() => {
+        const currentIdx = allRounds.findIndex(r => r.id === round.id)
+        const prevRound = currentIdx > 0 ? allRounds[currentIdx - 1] : null
+        const nextRound = currentIdx >= 0 && currentIdx < allRounds.length - 1 ? allRounds[currentIdx + 1] : null
+
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/')}
+              className="p-2 -ml-2 rounded-lg hover:bg-gray-100"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl font-bold">Match Centre</h1>
+              <p className="text-sm text-gray-500 truncate">
+                Round {round.round_number} vs {round.opposition || 'TBA'}
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => prevRound && navigate(`/match-centre/${prevRound.id}`)}
+                disabled={!prevRound}
+                className={`p-2 rounded-lg ${prevRound ? 'hover:bg-gray-100 text-gray-700' : 'text-gray-300'}`}
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => nextRound && navigate(`/match-centre/${nextRound.id}`)}
+                disabled={!nextRound}
+                className={`p-2 rounded-lg ${nextRound ? 'hover:bg-gray-100 text-gray-700' : 'text-gray-300'}`}
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Match info card */}
       <Card>

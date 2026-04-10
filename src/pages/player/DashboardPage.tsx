@@ -86,8 +86,24 @@ export default function DashboardPage() {
 
       const seasonIds = seasonsData?.map(s => s.id) || []
 
-      // Fetch next upcoming round
-      const { data: roundsData, error: roundsError } = seasonIds.length > 0
+      // Fetch the "active" round: either a recent round within 48 hours of match time,
+      // or the next upcoming round. This gives players time to enter stats/votes post-match.
+      const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+
+      // First try: recent round whose match time is within the last 48 hours
+      const { data: recentRounds } = seasonIds.length > 0
+        ? await supabase
+            .from('rounds')
+            .select('*')
+            .in('season_id', seasonIds)
+            .gte('date_time', fortyEightHoursAgo)
+            .lte('date_time', new Date().toISOString())
+            .order('date_time', { ascending: false })
+            .limit(1)
+        : { data: [], error: null }
+
+      // If no recent round, get the next upcoming one
+      const { data: upcomingRounds, error: roundsError } = (!recentRounds || recentRounds.length === 0) && seasonIds.length > 0
         ? await supabase
             .from('rounds')
             .select('*')
@@ -98,6 +114,8 @@ export default function DashboardPage() {
         : { data: [], error: null }
 
       if (roundsError) throw roundsError
+
+      const roundsData = (recentRounds && recentRounds.length > 0) ? recentRounds : upcomingRounds
 
       if (roundsData && roundsData.length > 0) {
         const nextRound = roundsData[0]
