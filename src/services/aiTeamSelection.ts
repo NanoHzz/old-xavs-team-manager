@@ -52,14 +52,31 @@ function positionCategoryToGroup(posCategory: string): PositionGroup | null {
   }
 }
 
-/** Map member primary_position enum to group */
+/** Map member primary_position value to group */
 function memberPositionToGroup(pos: string | null): PositionGroup | null {
   if (!pos) return null
-  if (pos.startsWith('back')) return 'Backs'
-  if (pos.startsWith('mid')) return 'Midfield'
-  if (pos.startsWith('forward')) return 'Forward'
-  if (pos === 'ruck') return 'Ruck'
-  return null
+  switch (pos) {
+    case 'key_back':
+    case 'back_pocket':
+    case 'half_back':
+    case 'back_general':   // legacy
+      return 'Backs'
+    case 'middle':
+    case 'wing':
+    case 'mid_centre':     // legacy
+    case 'mid_wing':       // legacy
+      return 'Midfield'
+    case 'half_forward':
+    case 'forward_pocket':
+    case 'key_forward':
+    case 'forward_general': // legacy
+    case 'forward_small':   // legacy
+      return 'Forward'
+    case 'ruck':
+      return 'Ruck'
+    default:
+      return null
+  }
 }
 
 // ── Scoring ─────────────────────────────────────────────────────────────

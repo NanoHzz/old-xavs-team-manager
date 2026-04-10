@@ -4,124 +4,59 @@ import { useTeam } from '../../contexts/TeamContext'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
-import { EmptyState } from '../../components/ui/EmptyState'
-import { MapPin } from 'lucide-react'
-import type { Position } from '../../types'
 
-interface PositionWithCategory extends Position {
-  category: string | null
-  isSelected?: boolean
-  preferenceOrder?: number
-}
+/** Simplified AFL position groups */
+const POSITION_GROUPS = [
+  { key: 'key_back',       label: 'Key Back' },
+  { key: 'back_pocket',    label: 'Back Pocket' },
+  { key: 'half_back',      label: 'Half Back' },
+  { key: 'ruck',           label: 'Ruck' },
+  { key: 'middle',         label: 'Middle',         hint: 'Centre / Ruck Rover / Rover' },
+  { key: 'wing',           label: 'Wing' },
+  { key: 'half_forward',   label: 'Half Forward' },
+  { key: 'forward_pocket', label: 'Forward Pocket' },
+  { key: 'key_forward',    label: 'Key Forward' },
+] as const
+
+type PositionKey = (typeof POSITION_GROUPS)[number]['key']
+
+const MAX_PREFERENCES = 4
 
 export default function PreferencesPage() {
-  const { currentTeam, currentMember, currentClub } = useTeam()
+  const { currentMember } = useTeam()
 
-  const [positions, setPositions] = useState<PositionWithCategory[]>([])
-  const [selectedPreferences, setSelectedPreferences] = useState<Map<string, number>>(new Map())
+  const [selected, setSelected] = useState<PositionKey[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
+  // Load existing preferences from members table
   useEffect(() => {
-    if (!currentTeam || !currentMember || !currentClub) {
+    if (!currentMember) {
       setLoading(false)
       return
     }
 
-    const fetchData = async () => {
-      setLoading(true)
-      try {
-        // Fetch all positions for the club
-        const { data: positionsData, error: posError } = await supabase
-          .from('positions')
-          .select('*')
-          .eq('team_id', currentTeam.id)
-          .order('name')
+    const existing: PositionKey[] = []
+    if (currentMember.primary_position) existing.push(currentMember.primary_position as PositionKey)
+    if (currentMember.secondary_position) existing.push(currentMember.secondary_position as PositionKey)
+    if (currentMember.third_position) existing.push(currentMember.third_position as PositionKey)
+    // fourth_position doesn't exist on member yet — we'll add it on save
+    setSelected(existing)
+    setLoading(false)
+  }, [currentMember])
 
-        if (posError) throw posError
-
-        // Fetch existing preferences
-        const { data: prefData } = await supabase
-          .from('position_preferences')
-          .select('*')
-          .eq('member_id', currentMember.id)
-
-        // Build category mapping
-        const categoryMap: Record<string, string> = {
-          FB: 'Defence',
-          HB: 'Defence',
-          BP: 'Defence',
-          C: 'Midfield',
-          HF: 'Forward',
-          FF: 'Forward',
-          CHB: 'Defence',
-          CHF: 'Forward',
-          R: 'Ruck',
-          RK: 'Ruck',
-          Sub: 'Bench',
-        }
-
-        // Build preferences map
-        const prefMap = new Map<string, number>()
-        prefData?.forEach(pref => {
-          prefMap.set(pref.position_id, pref.preference_rank ?? 0)
-        })
-        setSelectedPreferences(prefMap)
-
-        // Enhance positions with category, filter out Bench and Interchange
-        const enhancedPositions = (positionsData || [])
-          .filter(pos => pos.category !== 'Bench' && !pos.name.startsWith('Interchange'))
-          .map(pos => ({
-            ...pos,
-            category: (pos.abbreviation ? categoryMap[pos.abbreviation] : null) || 'Other',
-            isSelected: prefMap.has(pos.id),
-            preferenceOrder: prefMap.get(pos.id),
-          }))
-
-        setPositions(enhancedPositions)
-      } finally {
-        setLoading(false)
+  const handleToggle = (key: PositionKey) => {
+    setSelected(prev => {
+      const idx = prev.indexOf(key)
+      if (idx >= 0) {
+        // Deselect — remove and re-rank
+        return prev.filter(k => k !== key)
       }
-    }
-
-    fetchData()
-  }, [currentTeam, currentMember, currentClub])
-
-  const handlePositionToggle = (positionId: string) => {
-    const newPrefs = new Map(selectedPreferences)
-
-    if (newPrefs.has(positionId)) {
-      // Deselect
-      newPrefs.delete(positionId)
-    } else if (newPrefs.size < 3) {
-      // Select with next available rank
-      const nextRank = newPrefs.size + 1
-      newPrefs.set(positionId, nextRank)
-    }
-
-    setSelectedPreferences(newPrefs)
-    updatePositionsState(newPrefs)
-  }
-
-  const updatePositionsState = (prefs: Map<string, number>) => {
-    setPositions(positions =>
-      positions.map(pos => ({
-        ...pos,
-        isSelected: prefs.has(pos.id),
-        preferenceOrder: prefs.get(pos.id),
-      }))
-    )
-  }
-
-  /** Map a position's category to the member position enum value used by the AI algorithm */
-  const categoryToMemberPosition = (category: string | null): string | null => {
-    switch (category) {
-      case 'Defence': return 'back_general'
-      case 'Midfield': return 'mid_centre'
-      case 'Forward': return 'forward_general'
-      case 'Ruck': return 'ruck'
-      default: return null
-    }
+      if (prev.length >= MAX_PREFERENCES) return prev
+      return [...prev, key]
+    })
+    setSaved(false)
   }
 
   const handleSave = async () => {
@@ -129,67 +64,23 @@ export default function PreferencesPage() {
 
     setSaving(true)
     try {
-      // Delete existing preferences
-      const { error: deleteError } = await supabase
-        .from('position_preferences')
-        .delete()
-        .eq('member_id', currentMember.id)
-
-      if (deleteError) throw deleteError
-
-      // Insert new preferences
-      if (selectedPreferences.size > 0) {
-        const prefsToInsert = Array.from(selectedPreferences.entries()).map(([posId, order]) => ({
-          member_id: currentMember.id,
-          position_id: posId,
-          preference_rank: order,
-        }))
-
-        const { error: insertError } = await supabase
-          .from('position_preferences')
-          .insert(prefsToInsert)
-
-        if (insertError) throw insertError
-      }
-
-      // Also sync to members table (primary_position, secondary_position, third_position)
-      // so the AI team selection algorithm can read them
-      const sortedPrefs = Array.from(selectedPreferences.entries())
-        .sort(([, a], [, b]) => a - b)
-
-      const getMemberPosition = (index: number): string | null => {
-        if (index >= sortedPrefs.length) return null
-        const [posId] = sortedPrefs[index]
-        const pos = positions.find(p => p.id === posId)
-        return categoryToMemberPosition(pos?.category || null)
-      }
-
-      const { error: memberError } = await supabase
+      const { error } = await supabase
         .from('members')
         .update({
-          primary_position: getMemberPosition(0),
-          secondary_position: getMemberPosition(1),
-          third_position: getMemberPosition(2),
+          primary_position: selected[0] || null,
+          secondary_position: selected[1] || null,
+          third_position: selected[2] || null,
         })
         .eq('id', currentMember.id)
 
-      if (memberError) throw memberError
+      if (error) throw error
+
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
     } finally {
       setSaving(false)
     }
   }
-
-  const groupedPositions = positions.reduce(
-    (acc, pos) => {
-      const category = pos.category || 'Other'
-      if (!acc[category]) acc[category] = []
-      acc[category].push(pos)
-      return acc
-    },
-    {} as Record<string, PositionWithCategory[]>
-  )
-
-  const categoryOrder = ['Defence', 'Midfield', 'Forward', 'Ruck', 'Other']
 
   if (loading) {
     return (
@@ -200,81 +91,64 @@ export default function PreferencesPage() {
     )
   }
 
-  if (positions.length === 0) {
-    return (
-      <div className="p-4 pb-20">
-        <h1 className="text-2xl font-bold mb-6">Position Preferences</h1>
-        <Card>
-          <EmptyState
-            icon={<MapPin className="w-12 h-12" />}
-            title="No positions available"
-            description="There are no positions configured for your club."
-          />
-        </Card>
-      </div>
-    )
-  }
-
   return (
     <div className="p-4 pb-20 space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Position Preferences</h1>
-        <p className="text-gray-500 text-sm mt-1">Select up to 3 preferred positions in order</p>
+        <p className="text-gray-500 text-sm mt-1">
+          Select up to {MAX_PREFERENCES} preferred positions in order
+        </p>
       </div>
 
-      {selectedPreferences.size > 0 && (
+      {selected.length > 0 && (
         <Card className="bg-blue-50 border border-blue-200">
           <div className="text-sm text-blue-900">
-            <p className="font-medium">Selected: {selectedPreferences.size} of 3</p>
+            <p className="font-medium">Selected: {selected.length} of {MAX_PREFERENCES}</p>
             <p className="text-xs mt-1">
-              {Array.from(selectedPreferences.entries())
-                .sort(([, a], [, b]) => a - b)
-                .map(([posId]) => {
-                  const pos = positions.find(p => p.id === posId)
-                  return pos?.name
-                })
+              {selected
+                .map(key => POSITION_GROUPS.find(g => g.key === key)?.label)
                 .join(' → ')}
             </p>
           </div>
         </Card>
       )}
 
-      <div className="space-y-4">
-        {categoryOrder.map(category => {
-          const categoryPositions = groupedPositions[category]
-          if (!categoryPositions) return null
+      <div className="space-y-2">
+        {POSITION_GROUPS.map(group => {
+          const rank = selected.indexOf(group.key)
+          const isSelected = rank >= 0
 
           return (
-            <Card key={category} title={category}>
-              <div className="grid grid-cols-2 gap-2">
-                {categoryPositions.map(pos => (
-                  <button
-                    key={pos.id}
-                    onClick={() => handlePositionToggle(pos.id)}
-                    className={`p-3 rounded-lg border-2 text-left transition-all ${
-                      pos.isSelected
-                        ? 'border-blue-600 bg-blue-50'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-sm">{pos.name}</p>
-                        <p className="text-xs text-gray-500">{pos.abbreviation}</p>
-                      </div>
-                      {pos.isSelected && (
-                        <div className="flex items-center justify-center w-6 h-6 bg-blue-600 text-white rounded-full text-xs font-bold">
-                          {pos.preferenceOrder}
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                ))}
+            <button
+              key={group.key}
+              onClick={() => handleToggle(group.key)}
+              className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
+                isSelected
+                  ? 'border-blue-600 bg-blue-50'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-sm">{group.label}</p>
+                  {'hint' in group && group.hint && (
+                    <p className="text-xs text-gray-500">{group.hint}</p>
+                  )}
+                </div>
+                {isSelected && (
+                  <div className="flex items-center justify-center w-6 h-6 bg-blue-600 text-white rounded-full text-xs font-bold">
+                    {rank + 1}
+                  </div>
+                )}
               </div>
-            </Card>
+            </button>
           )
         })}
       </div>
+
+      {saved && (
+        <p className="text-sm text-green-600 text-center">Preferences saved!</p>
+      )}
 
       <Button
         onClick={handleSave}
