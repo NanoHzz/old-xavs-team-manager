@@ -633,29 +633,17 @@ export default function MatchCentrePage() {
       {tab === 'stats' && (
         <>
               {/* Your stats */}
-              <Card title="Your Stats">
+              <Card title="Your Goals">
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Goals</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={myGoals}
-                        onChange={e => setMyGoals(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Behinds</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={myBehinds}
-                        onChange={e => setMyBehinds(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Goals kicked this round</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={myGoals}
+                      onChange={e => setMyGoals(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
 
                   <div className="flex gap-2">
@@ -664,7 +652,7 @@ export default function MatchCentrePage() {
                       disabled={savingStats}
                       className="flex-1"
                     >
-                      {savingStats ? 'Saving...' : 'Save Stats'}
+                      {savingStats ? 'Saving...' : 'Save'}
                     </Button>
                     {statsSaved && <div className="text-green-600 text-sm flex items-center gap-1">
                       <CheckCircle className="w-4 h-4" /> Saved
@@ -673,8 +661,8 @@ export default function MatchCentrePage() {
                 </div>
               </Card>
 
-              {/* Team stats */}
-              <Card title="Team Stats">
+              {/* Team goal kickers */}
+              <Card title="Goal Kickers">
                 <div className="space-y-3">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -682,7 +670,6 @@ export default function MatchCentrePage() {
                         <tr className="border-b border-gray-200">
                           <th className="text-left py-2 px-2 font-semibold">Player</th>
                           <th className="text-center py-2 px-2 font-semibold">Goals</th>
-                          <th className="text-center py-2 px-2 font-semibold">Behinds</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -692,13 +679,16 @@ export default function MatchCentrePage() {
                             const bStats = allStats.find(s => s.member_id === b.member_id)
                             return (bStats?.goals || 0) - (aStats?.goals || 0)
                           })
+                          .filter(player => {
+                            const stats = allStats.find(s => s.member_id === player.member_id)
+                            return stats && stats.goals > 0
+                          })
                           .map(player => {
                             const stats = allStats.find(s => s.member_id === player.member_id)
                             return (
                               <tr key={player.id} className="border-b border-gray-100 hover:bg-gray-50">
                                 <td className="py-2 px-2">{player.memberName}</td>
-                                <td className="text-center py-2 px-2">{stats?.goals || 0}</td>
-                                <td className="text-center py-2 px-2">{stats?.behinds || 0}</td>
+                                <td className="text-center py-2 px-2 font-semibold">{stats?.goals || 0}</td>
                               </tr>
                             )
                           })}
@@ -706,16 +696,14 @@ export default function MatchCentrePage() {
                     </table>
                   </div>
 
-                  <div className="pt-3 border-t border-gray-200 grid grid-cols-2 gap-4">
-                    <div className="text-center">
-                      <p className="text-xs text-gray-600">Total Goals</p>
-                      <p className="text-2xl font-bold">{getTotalTeamStats().goals}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-gray-600">Total Behinds</p>
-                      <p className="text-2xl font-bold">{getTotalTeamStats().behinds}</p>
-                    </div>
+                  <div className="pt-3 border-t border-gray-200 text-center">
+                    <p className="text-xs text-gray-600">Total Goals</p>
+                    <p className="text-2xl font-bold">{getTotalTeamStats().goals}</p>
                   </div>
+
+                  {allStats.filter(s => s.goals > 0).length === 0 && (
+                    <p className="text-center text-gray-400 text-sm py-2">No goals entered yet</p>
+                  )}
                 </div>
               </Card>
         </>
