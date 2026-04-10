@@ -23,10 +23,24 @@ type PositionKey = (typeof POSITION_GROUPS)[number]['key']
 
 const MAX_PREFERENCES = 4
 
-/** Check if a stored value matches one of our position keys */
-function isValidPositionKey(val: string | null): val is PositionKey {
-  if (!val) return false
-  return POSITION_GROUPS.some(g => g.key === val)
+/** Map legacy DB values to new position keys */
+const LEGACY_MAP: Record<string, PositionKey> = {
+  back_general: 'back_pocket',
+  back_key: 'key_back',
+  mid_centre: 'middle',
+  mid_wing: 'wing',
+  forward_general: 'forward_pocket',
+  forward_small: 'forward_pocket',
+  forward_key: 'key_forward',
+}
+
+/** Normalise a stored value to a valid position key (handles legacy values) */
+function toPositionKey(val: string | null): PositionKey | null {
+  if (!val) return null
+  // Direct match
+  if (POSITION_GROUPS.some(g => g.key === val)) return val as PositionKey
+  // Legacy fallback
+  return LEGACY_MAP[val] ?? null
 }
 
 function labelForKey(key: PositionKey): string {
@@ -59,9 +73,11 @@ export default function PreferencesPage() {
 
         if (data) {
           const existing: PositionKey[] = []
-          if (isValidPositionKey(data.primary_position)) existing.push(data.primary_position)
-          if (isValidPositionKey(data.secondary_position)) existing.push(data.secondary_position)
-          if (isValidPositionKey(data.third_position)) existing.push(data.third_position)
+          const raw = [data.primary_position, data.secondary_position, data.third_position]
+          for (const val of raw) {
+            const key = toPositionKey(val)
+            if (key && !existing.includes(key)) existing.push(key)
+          }
           setSelected(existing)
         }
       } finally {
