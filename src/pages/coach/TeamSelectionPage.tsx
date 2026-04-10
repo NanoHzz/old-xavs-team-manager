@@ -252,6 +252,10 @@ export default function TeamSelectionPage() {
         setTeamSelection(selection)
       }
 
+      // Determine selection type based on position category
+      const position = positions.find(p => p.id === positionId)
+      const selType = position?.category === 'Bench' ? 'bench' : 'on_field'
+
       // Add selection player
       const { error } = await supabase
         .from('selection_players')
@@ -259,7 +263,7 @@ export default function TeamSelectionPage() {
           team_selection_id: selection.id,
           member_id: memberId,
           position_id: positionId,
-          selection_type: 'on_field',
+          selection_type: selType,
         })
 
       if (error) throw error
