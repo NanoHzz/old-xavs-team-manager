@@ -8,7 +8,7 @@ import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { AflOval } from '../../components/ui/AflOval'
 import { formatDateTime } from '../../lib/utils'
-import { ArrowLeft, Users, BarChart3, Award, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Users, BarChart3, Award, CheckCircle, ClipboardList } from 'lucide-react'
 import type { Round } from '../../types'
 
 interface TeamSheetPlayer {
@@ -48,7 +48,24 @@ interface AggregatedVote {
   voterCount: number
 }
 
-type TabId = 'team' | 'stats' | 'votes'
+interface GameDayRole {
+  id: string
+  team_id: string
+  name: string
+  description: string | null
+  is_active: boolean
+}
+
+interface RoleAssignment {
+  id: string
+  round_id: string
+  role_id: string
+  assigned_to: string
+  member_id: string | null
+  notes: string | null
+}
+
+type TabId = 'team' | 'roles' | 'stats' | 'votes'
 
 export default function MatchCentrePage() {
   const { roundId } = useParams<{ roundId: string }>()
@@ -77,10 +94,17 @@ export default function MatchCentrePage() {
   const [votesSaved, setVotesSaved] = useState(false)
   const [hasVoted, setHasVoted] = useState(false)
 
+  // Roles data
+  const [roles, setRoles] = useState<GameDayRole[]>([])
+  const [roleAssignments, setRoleAssignments] = useState<RoleAssignment[]>([])
+  const [savingRoles, setSavingRoles] = useState(false)
+  const [rolesSaved, setRolesSaved] = useState(false)
+
   const isCoachOrAdmin = currentMember?.role === 'coach' || currentMember?.role === 'admin'
 
   const tabs = [
     { id: 'team' as const, label: 'Team', icon: Users },
+    { id: 'roles' as const, label: 'Roles', icon: ClipboardList },
     { id: 'stats' as const, label: 'Stats', icon: BarChart3 },
     { id: 'votes' as const, label: 'Votes', icon: Award },
   ]
@@ -181,6 +205,25 @@ export default function MatchCentrePage() {
 
           if (allVotesError) throw allVotesError
           setAllVotes(allVotesData || [])
+        }
+
+        // 6. Fetch gameday roles and assignments
+        if (currentTeam) {
+          const { data: rolesData } = await supabase
+            .from('game_day_roles')
+            .select('*')
+            .eq('team_id', currentTeam.id)
+            .eq('is_active', true)
+            .order('name')
+
+          setRoles(rolesData || [])
+
+          const { data: assignmentsData } = await supabase
+            .from('role_assignments')
+            .select('*')
+            .eq('round_id', roundId)
+
+          setRoleAssignments(assignmentsData || [])
         }
       } catch (error) {
         console.error('Error fetching match centre data:', error)
@@ -314,6 +357,74 @@ export default function MatchCentrePage() {
     return {
       goals: allStats.reduce((sum, s) => sum + s.goals, 0),
       behinds: allStats.reduce((sum, s) => sum + s.behinds, 0),
+    }
+  }
+
+  // Get available members (available/maybe for this round) for role assignment
+  const getAssignableMembers = () => {
+    return members.filter(m => m.status === 'active')
+  }
+
+  const getAssignmentForRole = (roleId: string): RoleAssignment | undefined => {
+    return roleAssignments.find(a => a.role_id === roleId)
+  }
+
+  const handleAssignRole = async (roleId: string, memberId: string | null) => {
+    if (!roundId || !currentMember) return
+
+    setSavingRoles(true)
+    try {
+      const existing = getAssignmentForRole(roleId)
+      const member = memberId ? members.find(m => m.id === memberId) : null
+      const assignedName = member?.display_name || member?.guest_name || ''
+
+      if (memberId === '') {
+        // Unassign - delete
+        if (existing) {
+          await supabase
+            .from('role_assignments')
+            .delete()
+            .eq('id', existing.id)
+
+          setRoleAssignments(prev => prev.filter(a => a.id !== existing.id))
+        }
+      } else if (existing) {
+        // Update existing
+        const { data, error } = await supabase
+          .from('role_assignments')
+          .update({
+            member_id: memberId,
+            assigned_to: assignedName,
+          })
+          .eq('id', existing.id)
+          .select()
+          .single()
+
+        if (error) throw error
+        setRoleAssignments(prev => prev.map(a => a.id === existing.id ? data : a))
+      } else {
+        // Insert new
+        const { data, error } = await supabase
+          .from('role_assignments')
+          .insert({
+            round_id: roundId,
+            role_id: roleId,
+            member_id: memberId,
+            assigned_to: assignedName,
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+        setRoleAssignments(prev => [...prev, data])
+      }
+
+      setRolesSaved(true)
+      setTimeout(() => setRolesSaved(false), 2000)
+    } catch (error) {
+      console.error('Error assigning role:', error)
+    } finally {
+      setSavingRoles(false)
     }
   }
 
@@ -456,11 +567,71 @@ export default function MatchCentrePage() {
         </>
       )}
 
+      {/* Roles Tab */}
+      {tab === 'roles' && (
+        <>
+          <Card title={
+            <div className="flex items-center justify-between w-full">
+              <span>Gameday Roles</span>
+              {rolesSaved && (
+                <div className="text-green-600 text-sm flex items-center gap-1">
+                  <CheckCircle className="w-4 h-4" /> Saved
+                </div>
+              )}
+            </div>
+          }>
+            {roles.length === 0 ? (
+              <p className="text-center text-gray-500 py-4">No gameday roles configured</p>
+            ) : (
+              <div className="space-y-3">
+                {roles.map(role => {
+                  const assignment = getAssignmentForRole(role.id)
+                  const assignedMember = assignment?.member_id
+                    ? members.find(m => m.id === assignment.member_id)
+                    : null
+
+                  return (
+                    <div key={role.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-100 last:border-b-0">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm">{role.name}</p>
+                        {role.description && (
+                          <p className="text-xs text-gray-400">{role.description}</p>
+                        )}
+                      </div>
+
+                      {isCoachOrAdmin ? (
+                        <select
+                          value={assignment?.member_id || ''}
+                          onChange={e => handleAssignRole(role.id, e.target.value || '')}
+                          disabled={savingRoles}
+                          className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 min-w-[140px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">Unassigned</option>
+                          {getAssignableMembers().map(m => (
+                            <option key={m.id} value={m.id}>
+                              {m.display_name || m.guest_name || 'Unknown'}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className={`text-sm ${assignedMember ? 'font-medium' : 'text-gray-400'}`}>
+                          {assignedMember
+                            ? assignedMember.display_name || assignedMember.guest_name || 'Unknown'
+                            : 'Unassigned'}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
+        </>
+      )}
+
       {/* Stats Tab */}
       {tab === 'stats' && (
         <>
-          {round.status === 'completed' && (
-            <>
               {/* Your stats */}
               <Card title="Your Stats">
                 <div className="space-y-4">
@@ -547,22 +718,12 @@ export default function MatchCentrePage() {
                   </div>
                 </div>
               </Card>
-            </>
-          )}
-
-          {round.status !== 'completed' && (
-            <Card>
-              <p className="text-center text-gray-500 py-8">Stats will be available after the match is completed</p>
-            </Card>
-          )}
         </>
       )}
 
       {/* Votes Tab */}
       {tab === 'votes' && (
         <>
-          {round.status === 'completed' && (
-            <>
               {/* Voting section */}
               <Card title="Best & Fairest Votes">
                 <div className="space-y-4">
@@ -657,14 +818,6 @@ export default function MatchCentrePage() {
                   )}
                 </Card>
               )}
-            </>
-          )}
-
-          {round.status !== 'completed' && (
-            <Card>
-              <p className="text-center text-gray-500 py-8">Voting will be available after the match is completed</p>
-            </Card>
-          )}
         </>
       )}
     </div>
