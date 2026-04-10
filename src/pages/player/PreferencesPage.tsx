@@ -68,13 +68,15 @@ export default function PreferencesPage() {
         })
         setSelectedPreferences(prefMap)
 
-        // Enhance positions with category
-        const enhancedPositions = (positionsData || []).map(pos => ({
-          ...pos,
-          category: (pos.abbreviation ? categoryMap[pos.abbreviation] : null) || 'Other',
-          isSelected: prefMap.has(pos.id),
-          preferenceOrder: prefMap.get(pos.id),
-        }))
+        // Enhance positions with category, filter out Bench and Interchange
+        const enhancedPositions = (positionsData || [])
+          .filter(pos => pos.category !== 'Bench' && !pos.name.startsWith('Interchange'))
+          .map(pos => ({
+            ...pos,
+            category: (pos.abbreviation ? categoryMap[pos.abbreviation] : null) || 'Other',
+            isSelected: prefMap.has(pos.id),
+            preferenceOrder: prefMap.get(pos.id),
+          }))
 
         setPositions(enhancedPositions)
       } finally {
@@ -153,7 +155,7 @@ export default function PreferencesPage() {
     {} as Record<string, PositionWithCategory[]>
   )
 
-  const categoryOrder = ['Defence', 'Midfield', 'Forward', 'Ruck', 'Bench', 'Other']
+  const categoryOrder = ['Defence', 'Midfield', 'Forward', 'Ruck', 'Other']
 
   if (loading) {
     return (

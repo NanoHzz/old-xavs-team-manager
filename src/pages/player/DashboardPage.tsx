@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { formatDateTime, formatDate } from '../../lib/utils'
 import { supabase } from '../../lib/supabase'
 import { useTeam } from '../../contexts/TeamContext'
@@ -8,23 +9,14 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { AflOval } from '../../components/ui/AflOval'
-import { Calendar, AlertCircle, Plus, Send, X, MessageCircle, Users } from 'lucide-react'
-import type { Round, PlayerAvailability, Position, Member } from '../../types'
+import { Calendar, AlertCircle, Plus, Send, X, MessageCircle, Users, ChevronRight } from 'lucide-react'
+import type { Round, PlayerAvailability, Position } from '../../types'
 
 interface NextGame {
   round: Round
   availability?: PlayerAvailability
   selectionStatus?: string
   position?: Position
-}
-
-interface DraftPlayer {
-  member: Member
-  status: 'available' | 'maybe'
-  primaryPosition?: string
-  secondaryPosition?: string
-  assignedPositionName?: string
 }
 
 interface Announcement {
@@ -51,15 +43,14 @@ interface AnnouncementCommentData {
 export default function DashboardPage() {
   const { currentTeam, currentMember, members } = useTeam()
   const { user } = useAuth()
+  const navigate = useNavigate()
 
   const [nextGame, setNextGame] = useState<NextGame | null>(null)
   const [availability, setAvailability] = useState<'available' | 'unavailable' | 'maybe' | null>(null)
   const [gamesPlayed, setGamesPlayed] = useState(0)
   const [loading, setLoading] = useState(true)
   const [updatingAvailability, setUpdatingAvailability] = useState(false)
-
-  // Draft team state
-  const [draftPlayers, setDraftPlayers] = useState<DraftPlayer[]>([])
+  const [availableCount, setAvailableCount] = useState(0)
 
   // Announcements state
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
@@ -154,51 +145,14 @@ export default function DashboardPage() {
           setAvailability(availData.status)
         }
 
-        // Fetch draft team - all available/maybe players for this round
-        const { data: allAvailData } = await supabase
+        // Fetch available player count for this round
+        const { count: availCount } = await supabase
           .from('player_availability')
-          .select('*')
+          .select('*', { count: 'exact', head: true })
           .eq('round_id', nextRound.id)
           .in('status', ['available', 'maybe'])
 
-        // Also fetch all position assignments for this round (if team selection exists)
-        const assignedPositions: Record<string, string> = {}
-        if (teamSelectionData) {
-          const { data: allSelectionPlayers } = await supabase
-            .from('selection_players')
-            .select('member_id, positions(name)')
-            .eq('team_selection_id', teamSelectionData.id)
-
-          if (allSelectionPlayers) {
-            for (const sp of allSelectionPlayers) {
-              const posName = (sp.positions as unknown as { name: string } | null)?.name
-              if (posName) {
-                assignedPositions[sp.member_id] = posName
-              }
-            }
-          }
-        }
-
-        if (allAvailData) {
-          const draft: DraftPlayer[] = []
-          for (const av of allAvailData) {
-            const member = members.find(m => m.id === av.member_id)
-            if (!member || member.status !== 'active') continue
-            draft.push({
-              member,
-              status: av.status as 'available' | 'maybe',
-              primaryPosition: member.primary_position || undefined,
-              secondaryPosition: member.secondary_position || undefined,
-              assignedPositionName: assignedPositions[member.id],
-            })
-          }
-          draft.sort((a, b) => {
-            if (a.status === 'available' && b.status !== 'available') return -1
-            if (a.status !== 'available' && b.status === 'available') return 1
-            return (a.member.display_name || '').localeCompare(b.member.display_name || '')
-          })
-          setDraftPlayers(draft)
-        }
+        setAvailableCount(availCount || 0)
       }
 
       // Fetch announcements for this team
@@ -367,15 +321,19 @@ export default function DashboardPage() {
         <p className="text-gray-500 text-sm mt-1">Welcome, {user?.user_metadata?.full_name || 'Player'}</p>
       </div>
 
-      {/* Next Game Card with Draft Team */}
-      <Card title="Next Game">
-        {nextGame ? (
-          <div className="space-y-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="font-semibold text-lg">{nextGame.round.opposition || 'TBA'}</h3>
-                <p className="text-gray-600 text-sm">Round {nextGame.round.round_number}</p>
-              </div>
+      {/* Match Centre Card */}
+      {nextGame ? (
+        <div
+          onClick={() => navigate(`/match-centre/${nextGame.round.id}`)}
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">Match Centre</p>
+              <h3 className="font-semibold text-lg">{nextGame.round.opposition || 'TBA'}</h3>
+              <p className="text-gray-500 text-sm">Round {nextGame.round.round_number}</p>
+            </div>
+            <div className="flex items-center gap-3">
               {nextGame.selectionStatus && (
                 <Badge
                   variant={
@@ -391,57 +349,40 @@ export default function DashboardPage() {
                   {nextGame.selectionStatus === 'pending' && 'Pending'}
                 </Badge>
               )}
+              <ChevronRight className="w-5 h-5 text-gray-400" />
             </div>
+          </div>
 
-            {nextGame.position && (
-              <div className="text-sm">
-                <p className="text-gray-600">Position</p>
-                <p className="font-medium">{nextGame.position.name}</p>
-              </div>
-            )}
-
-            <div className="text-sm space-y-1">
-              <p className="text-gray-600">Date & Time</p>
-              <p className="font-medium">{nextGame.round.date_time ? formatDateTime(nextGame.round.date_time) : 'TBA'}</p>
+          <div className="mt-3 flex items-center gap-4 text-sm text-gray-600">
+            <div className="flex items-center gap-1.5">
+              <Calendar className="w-4 h-4" />
+              <span>{nextGame.round.date_time ? formatDateTime(nextGame.round.date_time) : 'TBA'}</span>
             </div>
-
-            {nextGame.round.venue && (
-              <div className="text-sm">
-                <p className="text-gray-600">Venue</p>
-                <p className="font-medium">{nextGame.round.venue}</p>
-              </div>
-            )}
-
-            {/* Draft Team oval based on availability */}
-            {draftPlayers.length > 0 && (
-              <div className="border-t pt-3 mt-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <Users className="w-4 h-4 text-gray-500" />
-                  <p className="text-sm font-semibold text-gray-700">Draft Team ({draftPlayers.length} available)</p>
-                </div>
-                <AflOval
-                  compact
-                  className="-mx-4"
-                  players={draftPlayers.map(dp => ({
-                    name: dp.member.display_name || dp.member.guest_name || 'Unknown',
-                    jerseyNumber: dp.member.jersey_number,
-                    positionName: dp.assignedPositionName,
-                    primaryPosition: dp.primaryPosition || null,
-                    isCurrentUser: dp.member.id === currentMember?.id,
-                    selectionType: 'on_field',
-                  }))}
-                />
+            {availableCount > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Users className="w-4 h-4" />
+                <span>{availableCount} available</span>
               </div>
             )}
           </div>
-        ) : (
+
+          {nextGame.round.venue && (
+            <p className="text-sm text-gray-500 mt-1">{nextGame.round.venue}</p>
+          )}
+
+          {nextGame.position && (
+            <p className="text-sm mt-2"><span className="text-gray-500">Your position:</span> <span className="font-medium">{nextGame.position.name}</span></p>
+          )}
+        </div>
+      ) : (
+        <Card title="Next Game">
           <EmptyState
             icon={<Calendar className="w-12 h-12" />}
             title="No upcoming games"
             description="There are no games scheduled at the moment."
           />
-        )}
-      </Card>
+        </Card>
+      )}
 
       {/* Availability Card */}
       {nextGame && (

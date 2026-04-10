@@ -308,11 +308,16 @@ export default function TeamSelectionPage() {
       const assignedPosIds = new Set(selectionPlayers.map(sp => sp.position_id))
       const unassignedPositions = positions.filter(p => !assignedPosIds.has(p.id))
 
-      // Get unassigned active players, prioritizing available ones
+      // Get unassigned active players, prioritizing available ones, excluding unavailable
       const unassignedPlayers = members
-        .filter(m => m.status === 'active' && !assignedMemberIds.has(m.id))
+        .filter(m => {
+          if (m.status !== 'active' || assignedMemberIds.has(m.id)) return false
+          const avail = playerAvailability[m.id]?.status
+          // Only include available and maybe players, exclude unavailable
+          return avail !== 'unavailable'
+        })
         .sort((a, b) => {
-          const statusOrder: Record<string, number> = { available: 0, maybe: 1, unavailable: 2 }
+          const statusOrder: Record<string, number> = { available: 0, maybe: 1 }
           const aStatus = playerAvailability[a.id]?.status
           const bStatus = playerAvailability[b.id]?.status
           const aOrder = aStatus ? (statusOrder[aStatus] ?? 1) : 1

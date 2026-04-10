@@ -660,7 +660,9 @@ BEGIN
       (NEW.id, 'Interchange 1', 'INT', 'Bench', 19),
       (NEW.id, 'Interchange 2', 'INT', 'Bench', 20),
       (NEW.id, 'Interchange 3', 'INT', 'Bench', 21),
-      (NEW.id, 'Interchange 4', 'INT', 'Bench', 22);
+      (NEW.id, 'Interchange 4', 'INT', 'Bench', 22),
+      (NEW.id, 'Interchange 5', 'INT', 'Bench', 23),
+      (NEW.id, 'Interchange 6', 'INT', 'Bench', 24);
   END IF;
   RETURN NEW;
 END;

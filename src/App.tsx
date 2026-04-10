@@ -22,6 +22,7 @@ import PreferencesPage from './pages/player/PreferencesPage'
 import ProfilePage from './pages/player/ProfilePage'
 import TeamSheetPage from './pages/player/TeamSheetPage'
 import SquadPage from './pages/player/SquadPage'
+import MatchCentrePage from './pages/player/MatchCentrePage'
 
 // Coach pages
 import TeamSelectionPage from './pages/coach/TeamSelectionPage'
@@ -96,6 +97,7 @@ function AppRoutes() {
             <Route path="preferences" element={<PreferencesPage />} />
             <Route path="team-sheet" element={<TeamSheetPage />} />
             <Route path="team-sheet/:roundId" element={<TeamSheetPage />} />
+            <Route path="match-centre/:roundId" element={<MatchCentrePage />} />
             <Route path="selection" element={<TeamSelectionPage />} />
             <Route path="ratings" element={<PlayerRatingsPage />} />
             <Route path="roles" element={<RolesPage />} />

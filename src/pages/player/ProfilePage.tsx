@@ -9,6 +9,16 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { LogOut, Copy, Check } from 'lucide-react'
 import type { InviteCode } from '../../types'
 
+const POSITION_OPTIONS = [
+  { value: 'back_key', label: 'Back (Key)' },
+  { value: 'back_general', label: 'Back (General)' },
+  { value: 'mid_centre', label: 'Mid (Centre)' },
+  { value: 'mid_wing', label: 'Mid (Wing)' },
+  { value: 'ruck', label: 'Ruck' },
+  { value: 'forward_key', label: 'Forward (Key)' },
+  { value: 'forward_small', label: 'Forward (Small)' },
+]
+
 export default function ProfilePage() {
   const { user, signOut } = useAuth()
   const { currentTeam, teams, currentMember, setCurrentTeam } = useTeam()
@@ -26,6 +36,7 @@ export default function ProfilePage() {
   const [thirdPosition, setThirdPosition] = useState<string | null>(null)
   const [savingPositions, setSavingPositions] = useState(false)
   const [positionError, setPositionError] = useState('')
+  const [positionSaved, setPositionSaved] = useState(false)
 
   useEffect(() => {
     if (!currentMember || !currentTeam) {
@@ -122,6 +133,9 @@ export default function ProfilePage() {
         .eq('id', currentMember.id)
 
       if (error) throw error
+
+      setPositionSaved(true)
+      setTimeout(() => setPositionSaved(false), 2000)
     } finally {
       setSavingPositions(false)
     }
@@ -230,13 +244,11 @@ export default function ProfilePage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select...</option>
-                <option value="back_key">Back (Key)</option>
-                <option value="back_general">Back (General)</option>
-                <option value="mid_centre">Mid (Centre)</option>
-                <option value="mid_wing">Mid (Wing)</option>
-                <option value="ruck">Ruck</option>
-                <option value="forward_key">Forward (Key)</option>
-                <option value="forward_small">Forward (Small)</option>
+                {POSITION_OPTIONS.map(pos => (
+                  <option key={pos.value} value={pos.value}>
+                    {pos.label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -250,13 +262,11 @@ export default function ProfilePage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select...</option>
-                <option value="back_key">Back (Key)</option>
-                <option value="back_general">Back (General)</option>
-                <option value="mid_centre">Mid (Centre)</option>
-                <option value="mid_wing">Mid (Wing)</option>
-                <option value="ruck">Ruck</option>
-                <option value="forward_key">Forward (Key)</option>
-                <option value="forward_small">Forward (Small)</option>
+                {POSITION_OPTIONS.filter(pos => pos.value !== primaryPosition).map(pos => (
+                  <option key={pos.value} value={pos.value}>
+                    {pos.label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -270,18 +280,20 @@ export default function ProfilePage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Select...</option>
-                <option value="back_key">Back (Key)</option>
-                <option value="back_general">Back (General)</option>
-                <option value="mid_centre">Mid (Centre)</option>
-                <option value="mid_wing">Mid (Wing)</option>
-                <option value="ruck">Ruck</option>
-                <option value="forward_key">Forward (Key)</option>
-                <option value="forward_small">Forward (Small)</option>
+                {POSITION_OPTIONS.filter(pos => pos.value !== primaryPosition && pos.value !== secondaryPosition).map(pos => (
+                  <option key={pos.value} value={pos.value}>
+                    {pos.label}
+                  </option>
+                ))}
               </select>
             </div>
 
             {positionError && (
               <p className="text-sm text-red-600">{positionError}</p>
+            )}
+
+            {positionSaved && (
+              <p className="text-sm text-green-600">Positions saved!</p>
             )}
 
             <Button

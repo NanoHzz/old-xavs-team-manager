@@ -537,6 +537,60 @@ export type Database = {
         }
         Relationships: []
       }
+      player_game_stats: {
+        Row: {
+          id: string
+          round_id: string
+          member_id: string
+          goals: number
+          behinds: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          round_id: string
+          member_id: string
+          goals?: number
+          behinds?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          round_id?: string
+          member_id?: string
+          goals?: number
+          behinds?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
+      player_votes: {
+        Row: {
+          id: string
+          round_id: string
+          voter_member_id: string
+          voted_for_member_id: string
+          votes: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          round_id: string
+          voter_member_id: string
+          voted_for_member_id: string
+          votes: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          round_id?: string
+          voter_member_id?: string
+          voted_for_member_id?: string
+          votes?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
       invite_codes: {
         Row: {
           id: string
