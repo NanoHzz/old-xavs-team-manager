@@ -148,14 +148,35 @@ function getPositionCoords(
   return { x: 50, y: 50 }
 }
 
+function isFollowerPosition(positionName?: string, primaryPosition?: string | null): boolean {
+  if (positionName) {
+    const lower = positionName.toLowerCase()
+    if (lower === 'ruck' || lower === 'rk' || lower === 'r') return true
+    if (lower === 'rover' || lower === 'rov') return true
+    if (lower === 'ruck rover' || lower === 'rr') return true
+  }
+  if (primaryPosition) {
+    if (primaryPosition === 'ruck' || primaryPosition === 'ruck_rover' || primaryPosition === 'rover') return true
+  }
+  return false
+}
+
 export function AflOval({ players, className = '', compact = false }: AflOvalProps) {
+  const onFieldPlayers = players.filter(p => p.selectionType === 'on_field')
+
+  // Separate followers from on-field players
+  const followerPlayers = onFieldPlayers.filter(p =>
+    isFollowerPosition(p.positionName, p.primaryPosition)
+  )
+  const ovalPlayers = onFieldPlayers.filter(p =>
+    !isFollowerPosition(p.positionName, p.primaryPosition)
+  )
+
   const positionedPlayers = useMemo(() => {
     const positionInstanceCount: Record<string, number> = {}
     const zoneCount: Record<string, number> = {}
 
-    return players
-      .filter(p => p.selectionType === 'on_field')
-      .map(player => {
+    return ovalPlayers.map(player => {
         const coords = getPositionCoords(player.positionName, player.primaryPosition, positionInstanceCount)
         // For non-paired positions that end up at the same exact spot, offset slightly
         const key = `${coords.x}-${coords.y}`
@@ -170,7 +191,7 @@ export function AflOval({ players, className = '', compact = false }: AflOvalPro
           y: coords.y,
         }
       })
-  }, [players])
+  }, [ovalPlayers])
 
   const benchPlayers = players.filter(p => p.selectionType !== 'on_field')
 
@@ -283,6 +304,40 @@ export function AflOval({ players, className = '', compact = false }: AflOvalPro
           )
         })}
       </div>
+
+      {/* Followers — Ruck, Rover, Ruck Rover */}
+      {followerPlayers.length > 0 && (
+        <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <p className="text-xs font-semibold text-green-800 mb-2">FOLLOWERS</p>
+          <div className="flex justify-center gap-4">
+            {followerPlayers.map((player, i) => {
+              const parts = player.name.split(' ')
+              const shortName = parts.length > 1
+                ? `${parts[0].charAt(0)}.${parts[parts.length - 1]}`
+                : player.name
+              return (
+                <div key={i} className="flex flex-col items-center">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shadow-md border-2 ${
+                      player.isCurrentUser
+                        ? 'bg-yellow-400 border-yellow-200 text-gray-900'
+                        : 'bg-white border-green-300 text-gray-900'
+                    }`}
+                  >
+                    {player.jerseyNumber ? `#${player.jerseyNumber}` : player.name.charAt(0)}
+                  </div>
+                  <span className="text-[10px] font-medium text-gray-700 mt-1 whitespace-nowrap">
+                    {shortName}
+                  </span>
+                  <span className="text-[9px] text-green-700 font-medium">
+                    {player.positionName || 'Follower'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Bench */}
       {benchPlayers.length > 0 && (
