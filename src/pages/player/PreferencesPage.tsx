@@ -4,6 +4,7 @@ import { useTeam } from '../../contexts/TeamContext'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
+import { X } from 'lucide-react'
 
 /** Simplified AFL position groups */
 const POSITION_GROUPS = [
@@ -22,6 +23,16 @@ type PositionKey = (typeof POSITION_GROUPS)[number]['key']
 
 const MAX_PREFERENCES = 4
 
+/** Check if a stored value matches one of our position keys */
+function isValidPositionKey(val: string | null): val is PositionKey {
+  if (!val) return false
+  return POSITION_GROUPS.some(g => g.key === val)
+}
+
+function labelForKey(key: PositionKey): string {
+  return POSITION_GROUPS.find(g => g.key === key)?.label ?? key
+}
+
 export default function PreferencesPage() {
   const { currentMember } = useTeam()
 
@@ -30,32 +41,51 @@ export default function PreferencesPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  // Load existing preferences from members table
+  // Load existing preferences from DB (not just context, which may be stale)
   useEffect(() => {
     if (!currentMember) {
       setLoading(false)
       return
     }
 
-    const existing: PositionKey[] = []
-    if (currentMember.primary_position) existing.push(currentMember.primary_position as PositionKey)
-    if (currentMember.secondary_position) existing.push(currentMember.secondary_position as PositionKey)
-    if (currentMember.third_position) existing.push(currentMember.third_position as PositionKey)
-    // fourth_position doesn't exist on member yet — we'll add it on save
-    setSelected(existing)
-    setLoading(false)
+    const loadPreferences = async () => {
+      setLoading(true)
+      try {
+        const { data } = await supabase
+          .from('members')
+          .select('primary_position, secondary_position, third_position')
+          .eq('id', currentMember.id)
+          .single()
+
+        if (data) {
+          const existing: PositionKey[] = []
+          if (isValidPositionKey(data.primary_position)) existing.push(data.primary_position)
+          if (isValidPositionKey(data.secondary_position)) existing.push(data.secondary_position)
+          if (isValidPositionKey(data.third_position)) existing.push(data.third_position)
+          setSelected(existing)
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadPreferences()
   }, [currentMember])
 
   const handleToggle = (key: PositionKey) => {
     setSelected(prev => {
       const idx = prev.indexOf(key)
       if (idx >= 0) {
-        // Deselect — remove and re-rank
         return prev.filter(k => k !== key)
       }
       if (prev.length >= MAX_PREFERENCES) return prev
       return [...prev, key]
     })
+    setSaved(false)
+  }
+
+  const handleClear = () => {
+    setSelected([])
     setSaved(false)
   }
 
@@ -76,7 +106,7 @@ export default function PreferencesPage() {
       if (error) throw error
 
       setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
+      setTimeout(() => setSaved(false), 3000)
     } finally {
       setSaving(false)
     }
@@ -96,36 +126,56 @@ export default function PreferencesPage() {
       <div>
         <h1 className="text-2xl font-bold">Position Preferences</h1>
         <p className="text-gray-500 text-sm mt-1">
-          Select up to {MAX_PREFERENCES} preferred positions in order
+          Tap to select up to {MAX_PREFERENCES} preferred positions in order of priority
         </p>
       </div>
 
+      {/* Current selections summary */}
       {selected.length > 0 && (
         <Card className="bg-blue-50 border border-blue-200">
-          <div className="text-sm text-blue-900">
-            <p className="font-medium">Selected: {selected.length} of {MAX_PREFERENCES}</p>
-            <p className="text-xs mt-1">
-              {selected
-                .map(key => POSITION_GROUPS.find(g => g.key === key)?.label)
-                .join(' → ')}
-            </p>
+          <div className="flex items-start justify-between">
+            <div className="text-sm text-blue-900">
+              <p className="font-medium">Your preferences ({selected.length}/{MAX_PREFERENCES})</p>
+              <div className="mt-2 space-y-1">
+                {selected.map((key, i) => (
+                  <p key={key} className="text-xs">
+                    <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-600 text-white rounded-full text-xs font-bold mr-2">
+                      {i + 1}
+                    </span>
+                    {labelForKey(key)}
+                  </p>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={handleClear}
+              className="p-1 text-blue-400 hover:text-blue-700 transition-colors"
+              title="Clear all"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </Card>
       )}
 
+      {/* Position buttons */}
       <div className="space-y-2">
         {POSITION_GROUPS.map(group => {
           const rank = selected.indexOf(group.key)
           const isSelected = rank >= 0
+          const isFull = selected.length >= MAX_PREFERENCES && !isSelected
 
           return (
             <button
               key={group.key}
               onClick={() => handleToggle(group.key)}
+              disabled={isFull}
               className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
                 isSelected
                   ? 'border-blue-600 bg-blue-50'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
+                  : isFull
+                    ? 'border-gray-100 bg-gray-50 opacity-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
               }`}
             >
               <div className="flex items-center justify-between">
@@ -147,17 +197,47 @@ export default function PreferencesPage() {
       </div>
 
       {saved && (
-        <p className="text-sm text-green-600 text-center">Preferences saved!</p>
+        <p className="text-sm text-green-600 text-center font-medium">Preferences saved!</p>
       )}
 
-      <Button
-        onClick={handleSave}
-        loading={saving}
-        fullWidth
-        variant="primary"
-      >
-        Save Preferences
-      </Button>
+      <div className="space-y-2">
+        <Button
+          onClick={handleSave}
+          loading={saving}
+          fullWidth
+          variant="primary"
+        >
+          Save Preferences
+        </Button>
+
+        {selected.length > 0 && (
+          <Button
+            onClick={async () => {
+              handleClear()
+              if (!currentMember) return
+              setSaving(true)
+              try {
+                await supabase
+                  .from('members')
+                  .update({
+                    primary_position: null,
+                    secondary_position: null,
+                    third_position: null,
+                  })
+                  .eq('id', currentMember.id)
+                setSaved(true)
+                setTimeout(() => setSaved(false), 3000)
+              } finally {
+                setSaving(false)
+              }
+            }}
+            fullWidth
+            variant="secondary"
+          >
+            Clear All Preferences
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
