@@ -148,6 +148,17 @@ function getPositionCoords(
   return { x: 50, y: 50 }
 }
 
+/** Format name as "F.Surname" — handles edge cases like single names */
+function formatShortName(name: string): string {
+  const trimmed = name.trim()
+  const parts = trimmed.split(/\s+/).filter(p => p.length > 0)
+  if (parts.length <= 1) return trimmed  // Single name like "Sam" — return as-is
+  const initial = parts[0].charAt(0)
+  const surname = parts[parts.length - 1]
+  if (!surname) return trimmed
+  return `${initial}.${surname}`
+}
+
 function isFollowerPosition(positionName?: string, primaryPosition?: string | null): boolean {
   if (positionName) {
     const lower = positionName.toLowerCase()
@@ -164,10 +175,19 @@ function isFollowerPosition(positionName?: string, primaryPosition?: string | nu
 export function AflOval({ players, className = '', compact = false }: AflOvalProps) {
   const onFieldPlayers = players.filter(p => p.selectionType === 'on_field')
 
-  // Separate followers from on-field players
-  const followerPlayers = onFieldPlayers.filter(p =>
-    isFollowerPosition(p.positionName, p.primaryPosition)
-  )
+  // Separate followers from on-field players, sort: Ruck → Ruck Rover → Rover
+  const FOLLOWER_ORDER: Record<string, number> = {
+    'ruck': 0, 'rk': 0, 'r': 0,
+    'ruck rover': 1, 'rr': 1,
+    'rover': 2, 'rov': 2,
+  }
+  const followerPlayers = onFieldPlayers
+    .filter(p => isFollowerPosition(p.positionName, p.primaryPosition))
+    .sort((a, b) => {
+      const aOrder = FOLLOWER_ORDER[(a.positionName || '').toLowerCase()] ?? 9
+      const bOrder = FOLLOWER_ORDER[(b.positionName || '').toLowerCase()] ?? 9
+      return aOrder - bOrder
+    })
   const ovalPlayers = onFieldPlayers.filter(p =>
     !isFollowerPosition(p.positionName, p.primaryPosition)
   )
@@ -252,11 +272,7 @@ export function AflOval({ players, className = '', compact = false }: AflOvalPro
 
         {/* Player labels */}
         {positionedPlayers.map((player, i) => {
-          // Format as "F.Surname"
-          const parts = player.name.split(' ')
-          const shortName = parts.length > 1
-            ? `${parts[0].charAt(0)}.${parts[parts.length - 1]}`
-            : player.name
+          const shortName = formatShortName(player.name)
 
           return compact ? (
             <div
@@ -311,10 +327,7 @@ export function AflOval({ players, className = '', compact = false }: AflOvalPro
           <p className="text-xs font-semibold text-green-800 mb-2">FOLLOWERS</p>
           <div className="flex justify-center gap-4">
             {followerPlayers.map((player, i) => {
-              const parts = player.name.split(' ')
-              const shortName = parts.length > 1
-                ? `${parts[0].charAt(0)}.${parts[parts.length - 1]}`
-                : player.name
+              const shortName = formatShortName(player.name)
               return (
                 <div key={i} className="flex flex-col items-center">
                   <div

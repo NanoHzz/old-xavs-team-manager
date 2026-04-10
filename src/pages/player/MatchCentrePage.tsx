@@ -543,25 +543,6 @@ export default function MatchCentrePage() {
                 </div>
               </Card>
 
-              {getBenchPlayers().length > 0 && (
-                <Card title="Interchange">
-                  <div className="flex flex-wrap gap-2">
-                    {getBenchPlayers().map(player => (
-                      <div
-                        key={player.id}
-                        className={`px-3 py-2 rounded text-sm font-medium ${
-                          player.member_id === currentMember?.id
-                            ? 'bg-blue-50 border border-blue-300'
-                            : 'bg-gray-50 border border-gray-200'
-                        }`}
-                      >
-                        {player.jerseyNumber && <span className="font-bold mr-1">#{player.jerseyNumber}</span>}
-                        {player.memberName}
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
             </>
           )}
         </>
