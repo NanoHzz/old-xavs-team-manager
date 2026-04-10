@@ -837,14 +837,24 @@ export default function TeamSelectionPage() {
                 No positions defined
               </p>
             ) : (
-              positions.map(pos => {
+              positions.map((pos, idx) => {
                 const assigned = assignedPlayersByPosition[pos.id]
                 const assignedMember = assigned
                   ? members.find(m => m.id === assigned.member_id)
                   : null
 
+                // Show separator before first bench position
+                const prevPos = idx > 0 ? positions[idx - 1] : null
+                const showBenchSeparator = pos.category === 'Bench' && prevPos?.category !== 'Bench'
+
                 return (
-                  <div key={pos.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                  <div key={pos.id}>
+                    {showBenchSeparator && (
+                      <div className="border-t-2 border-gray-300 pt-3 mt-3 mb-1">
+                        <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Interchange</p>
+                      </div>
+                    )}
+                  <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
                     <div>
                       <p className="font-medium text-sm">{pos.name}</p>
                       <p className="text-xs text-gray-500">{pos.abbreviation}</p>
@@ -939,6 +949,7 @@ export default function TeamSelectionPage() {
                         </Card>
                       </div>
                     )}
+                  </div>
                   </div>
                 )
               })
