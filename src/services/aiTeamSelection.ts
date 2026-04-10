@@ -2,9 +2,8 @@
  * AI Team Selection Algorithm
  *
  * Generates an optimal team selection based on:
- * - Player position category ratings (Backs, Midfield, Forward, Ruck)
  * - Player overall ratings (overall, fitness, form)
- * - Position preferences (primary, secondary, third)
+ * - Position preferences (primary, secondary, third) cross-referenced with position category
  * - Availability status (available > maybe)
  * - Fairness / rotation (games played in recent rounds)
  * - Opposition strength rating (1-5 stars)
@@ -19,20 +18,12 @@ import type { Member, Position } from '../types'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
-export interface CategoryRatings {
-  Backs: number
-  Midfield: number
-  Forward: number
-  Ruck: number
-}
-
 export interface PlayerSelectionData {
   member: Member
   availability: 'available' | 'maybe'
   overallRating: number   // 1-10
   fitnessRating: number   // 1-10
   formRating: number      // 1-10
-  categoryRatings: CategoryRatings
   recentGamesPlayed: number // games in last N rounds
   totalGamesPlayed: number
 }
@@ -46,10 +37,12 @@ export interface SelectionResult {
 
 type SelectionMode = 'STRONGEST' | 'ROTATION' | 'BALANCED'
 
-// ── Category mapping ────────────────────────────────────────────────────
+// ── Position mapping ────────────────────────────────────────────────────
 
-/** Map DB position categories to rating categories */
-function positionCategoryToRatingCategory(posCategory: string): keyof CategoryRatings | null {
+type PositionGroup = 'Backs' | 'Midfield' | 'Forward' | 'Ruck'
+
+/** Map DB position categories to group */
+function positionCategoryToGroup(posCategory: string): PositionGroup | null {
   switch (posCategory) {
     case 'Defence': return 'Backs'
     case 'Midfield': return 'Midfield'
@@ -59,8 +52,8 @@ function positionCategoryToRatingCategory(posCategory: string): keyof CategoryRa
   }
 }
 
-/** Map member primary_position enum to rating category */
-function memberPositionToCategory(pos: string | null): keyof CategoryRatings | null {
+/** Map member primary_position enum to group */
+function memberPositionToGroup(pos: string | null): PositionGroup | null {
   if (!pos) return null
   if (pos.startsWith('back')) return 'Backs'
   if (pos.startsWith('mid')) return 'Midfield'
@@ -79,22 +72,18 @@ function getSelectionMode(oppositionRating: number | null): SelectionMode {
 }
 
 /**
- * Compute a composite strength score for a player at a given position.
+ * Compute a composite strength score for a player.
+ * Uses overall rating, fitness, form, availability, and fairness.
+ * Position fit is handled separately via preference scoring.
  */
 function computeStrengthScore(
   player: PlayerSelectionData,
-  posCategory: keyof CategoryRatings | null,
   mode: SelectionMode,
   maxRecentGames: number
 ): number {
   const overall = player.overallRating / 10
   const fitness = player.fitnessRating / 10
   const form = player.formRating / 10
-
-  // Position-specific skill
-  const posSkill = posCategory
-    ? (player.categoryRatings[posCategory] || 5) / 10
-    : (player.overallRating / 10)
 
   // Availability bonus
   const availBonus = player.availability === 'available' ? 1.0 : 0.7
@@ -108,42 +97,39 @@ function computeStrengthScore(
   // In strongest mode, recent play (form/match fitness) is slightly positive
   let fairnessComponent: number
   if (mode === 'ROTATION') {
-    fairnessComponent = 1 - playRate  // lower play rate = higher score
+    fairnessComponent = 1 - playRate
   } else if (mode === 'STRONGEST') {
-    fairnessComponent = 0.5 + (playRate * 0.2) // slight boost for match-fit players
+    fairnessComponent = 0.5 + (playRate * 0.2)
   } else {
-    fairnessComponent = 0.7 - (playRate * 0.3) // mild rotation bias
+    fairnessComponent = 0.7 - (playRate * 0.3)
   }
 
   // Weighted composite - adjust weights based on mode
   let score: number
   if (mode === 'STRONGEST') {
     score = (
-      0.30 * overall +
-      0.25 * posSkill +
-      0.15 * fitness +
-      0.15 * form +
+      0.40 * overall +
+      0.20 * fitness +
+      0.20 * form +
       0.05 * availBonus +
-      0.10 * fairnessComponent
+      0.15 * fairnessComponent
     )
   } else if (mode === 'ROTATION') {
     score = (
-      0.15 * overall +
-      0.15 * posSkill +
+      0.20 * overall +
       0.10 * fitness +
       0.10 * form +
       0.10 * availBonus +
-      0.40 * fairnessComponent
+      0.50 * fairnessComponent
     )
   } else {
     // BALANCED
     score = (
-      0.25 * overall +
-      0.20 * posSkill +
-      0.12 * fitness +
-      0.12 * form +
-      0.06 * availBonus +
-      0.25 * fairnessComponent
+      0.30 * overall +
+      0.15 * fitness +
+      0.15 * form +
+      0.08 * availBonus +
+      0.32 * fairnessComponent
     )
   }
 
@@ -156,17 +142,16 @@ function getPositionPreferenceScore(
   player: PlayerSelectionData,
   position: Position
 ): number {
-  const posCategory = position.category
-  const ratingCat = positionCategoryToRatingCategory(posCategory || '')
+  const posGroup = positionCategoryToGroup(position.category || '')
 
-  // Check if player's primary/secondary/third position maps to this category
-  const primaryCat = memberPositionToCategory(player.member.primary_position)
-  const secondaryCat = memberPositionToCategory(player.member.secondary_position)
-  const thirdCat = memberPositionToCategory(player.member.third_position)
+  // Check if player's primary/secondary/third position maps to this group
+  const primaryGroup = memberPositionToGroup(player.member.primary_position)
+  const secondaryGroup = memberPositionToGroup(player.member.secondary_position)
+  const thirdGroup = memberPositionToGroup(player.member.third_position)
 
-  if (primaryCat && ratingCat && primaryCat === ratingCat) return 1.0
-  if (secondaryCat && ratingCat && secondaryCat === ratingCat) return 0.7
-  if (thirdCat && ratingCat && thirdCat === ratingCat) return 0.4
+  if (primaryGroup && posGroup && primaryGroup === posGroup) return 1.0
+  if (secondaryGroup && posGroup && secondaryGroup === posGroup) return 0.7
+  if (thirdGroup && posGroup && thirdGroup === posGroup) return 0.4
   return 0.1 // no preference match but can still play
 }
 
@@ -201,12 +186,11 @@ export function generateTeamSelection(
     const player = players.find(p => p.member.id === memberId)
     const position = positions.find(p => p.id === posId)
     if (player && position) {
-      const ratingCat = positionCategoryToRatingCategory(position.category || '')
       results.push({
         memberId,
         positionId: posId,
         selectionType: position.category === 'Bench' ? 'bench' : 'on_field',
-        score: computeStrengthScore(player, ratingCat, mode, maxRecentGames),
+        score: computeStrengthScore(player, mode, maxRecentGames),
       })
       assignedMembers.add(memberId)
       assignedPositionIds.add(posId)
@@ -217,16 +201,14 @@ export function generateTeamSelection(
   for (const position of fieldPositions) {
     if (assignedPositionIds.has(position.id)) continue
 
-    const ratingCat = positionCategoryToRatingCategory(position.category || '')
-
     // Score all unassigned players for this position
     const candidates = players
       .filter(p => !assignedMembers.has(p.member.id))
       .map(p => {
-        const strengthScore = computeStrengthScore(p, ratingCat, mode, maxRecentGames)
+        const strengthScore = computeStrengthScore(p, mode, maxRecentGames)
         const prefScore = getPositionPreferenceScore(p, position)
-        // Combined: strength matters most, preference is a tiebreaker
-        const combinedScore = strengthScore * 0.7 + prefScore * 0.3
+        // Combined: strength matters most, preferred position is a strong factor
+        const combinedScore = strengthScore * 0.6 + prefScore * 0.4
         return { player: p, score: combinedScore }
       })
       .sort((a, b) => b.score - a.score)
@@ -249,7 +231,7 @@ export function generateTeamSelection(
     .filter(p => !assignedMembers.has(p.member.id))
     .map(p => ({
       player: p,
-      score: computeStrengthScore(p, null, mode, maxRecentGames),
+      score: computeStrengthScore(p, mode, maxRecentGames),
     }))
     .sort((a, b) => b.score - a.score)
 

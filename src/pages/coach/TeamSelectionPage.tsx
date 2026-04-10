@@ -12,10 +12,9 @@ import type {
   Position,
   PositionPreference,
   PlayerRating,
-  PlayerCategoryRating,
 } from '../../types'
 import { generateTeamSelection, getSelectionMode } from '../../services/aiTeamSelection'
-import type { PlayerSelectionData, CategoryRatings } from '../../services/aiTeamSelection'
+import type { PlayerSelectionData } from '../../services/aiTeamSelection'
 import { format } from 'date-fns'
 import { ChevronDown, Lock, Trash2, Users, Star, Plus } from 'lucide-react'
 
@@ -39,7 +38,6 @@ export default function TeamSelectionPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [showPlayerPicker, setShowPlayerPicker] = useState<string | null>(null)
   const [lockedPositions, setLockedPositions] = useState<Set<string>>(new Set())
-  const [categoryRatings, setCategoryRatings] = useState<Record<string, PlayerCategoryRating[]>>({})
   const [showExternalPlayerForm, setShowExternalPlayerForm] = useState(false)
   const [externalPlayerForm, setExternalPlayerForm] = useState({
     name: '',
@@ -130,25 +128,6 @@ export default function TeamSelectionPage() {
       )
       setPlayerRatings(ratingsMap)
 
-      // Fetch category ratings for all members
-      const { data: catRatingsData, error: catRatingsError } = await supabase
-        .from('player_category_ratings')
-        .select('*')
-        .in(
-          'member_id',
-          members.map(m => m.id)
-        )
-
-      if (catRatingsError) throw catRatingsError
-      const catRatingsMap = (catRatingsData || []).reduce(
-        (acc, r) => {
-          if (!acc[r.member_id]) acc[r.member_id] = []
-          acc[r.member_id].push(r)
-          return acc
-        },
-        {} as Record<string, PlayerCategoryRating[]>
-      )
-      setCategoryRatings(catRatingsMap)
     } catch (err) {
       console.error('Error fetching data:', err)
       setError('Failed to load team data')
@@ -366,19 +345,6 @@ export default function TeamSelectionPage() {
 
       for (const member of availablePlayers) {
         const rating = playerRatings[member.id]
-        const catRatings = categoryRatings[member.id] || []
-
-        // Build CategoryRatings from player_category_ratings
-        const categoryRatingsMap: CategoryRatings = {
-          Backs: 5,
-          Midfield: 5,
-          Forward: 5,
-          Ruck: 5,
-        }
-
-        catRatings.forEach((cr: { category: keyof CategoryRatings; rating: number }) => {
-          categoryRatingsMap[cr.category] = cr.rating
-        })
 
         playerSelectionDataList.push({
           member,
@@ -386,7 +352,6 @@ export default function TeamSelectionPage() {
           overallRating: rating?.overall || member.external_rating || 5,
           fitnessRating: rating?.fitness || 5,
           formRating: rating?.form || 5,
-          categoryRatings: categoryRatingsMap,
           recentGamesPlayed: recentGameCounts[member.id] || 0,
           totalGamesPlayed: 0,
         })
