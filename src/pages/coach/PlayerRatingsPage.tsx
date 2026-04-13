@@ -173,55 +173,52 @@ export default function PlayerRatingsPage() {
     try {
       if (!currentMember) throw new Error('No current member')
 
-      const updates = members.map(m => {
+      // Save each member one at a time so a single failure doesn't block all
+      let savedCount = 0
+      let errorCount = 0
+
+      for (const m of members) {
         const rating = ratings[m.id] || { overall: 5, fitness: 5, form: 5 }
         const existing = playerRatings.get(m.id)
 
-        if (existing) {
-          return {
-            id: existing.id,
-            member_id: m.id,
-            overall: rating.overall,
-            fitness: rating.fitness,
-            form: rating.form,
-            rated_by: currentMember.id,
+        // Ensure integer values for DB integer columns
+        const overall = Math.round(Math.min(10, Math.max(1, rating.overall)))
+        const fitness = Math.round(Math.min(10, Math.max(1, rating.fitness)))
+        const form = Math.round(Math.min(10, Math.max(1, rating.form)))
+
+        try {
+          if (existing) {
+            const { error } = await supabase
+              .from('player_ratings')
+              .update({ overall, fitness, form, rated_by: currentMember.id })
+              .eq('id', existing.id)
+            if (error) throw error
+          } else {
+            const { error } = await supabase
+              .from('player_ratings')
+              .insert({
+                member_id: m.id,
+                overall,
+                fitness,
+                form,
+                rated_by: currentMember.id,
+              })
+            if (error) throw error
           }
-        } else {
-          return {
-            member_id: m.id,
-            overall: rating.overall,
-            fitness: rating.fitness,
-            form: rating.form,
-            rated_by: currentMember.id,
-          }
+          savedCount++
+        } catch (err) {
+          console.error(`Failed to save rating for ${m.display_name || m.id}:`, err)
+          errorCount++
         }
-      })
-
-      const inserts = updates.filter(u => !('id' in u))
-      const updateIds = updates.filter(u => 'id' in u)
-
-      // Insert new ratings
-      if (inserts.length > 0) {
-        const { error } = await supabase.from('player_ratings').insert(inserts)
-        if (error) throw error
-      }
-
-      // Update existing ratings
-      for (const update of updateIds) {
-        const { error } = await supabase
-          .from('player_ratings')
-          .update({
-            overall: update.overall,
-            fitness: update.fitness,
-            form: update.form,
-            rated_by: update.rated_by,
-          })
-          .eq('id', (update as any).id)
-        if (error) throw error
       }
 
       await fetchData()
-      alert('All ratings saved successfully!')
+
+      if (errorCount === 0) {
+        alert(`All ${savedCount} ratings saved!`)
+      } else {
+        alert(`Saved ${savedCount} ratings. ${errorCount} failed — check console for details.`)
+      }
     } catch (err) {
       console.error('Error saving ratings:', err)
       setError('Failed to save ratings')
@@ -363,13 +360,13 @@ export default function PlayerRatingsPage() {
                       type="range"
                       min="1"
                       max="10"
-                      step="0.5"
+                      step="1"
                       value={player.overallRating || 5}
                       onChange={e =>
                         handleRatingChange(
                           player.memberId,
                           'overall',
-                          parseFloat(e.target.value)
+                          parseInt(e.target.value, 10)
                         )
                       }
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
@@ -394,13 +391,13 @@ export default function PlayerRatingsPage() {
                       type="range"
                       min="1"
                       max="10"
-                      step="0.5"
+                      step="1"
                       value={player.fitnessRating || 5}
                       onChange={e =>
                         handleRatingChange(
                           player.memberId,
                           'fitness',
-                          parseFloat(e.target.value)
+                          parseInt(e.target.value, 10)
                         )
                       }
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
@@ -425,13 +422,13 @@ export default function PlayerRatingsPage() {
                       type="range"
                       min="1"
                       max="10"
-                      step="0.5"
+                      step="1"
                       value={player.formRating || 5}
                       onChange={e =>
                         handleRatingChange(
                           player.memberId,
                           'form',
-                          parseFloat(e.target.value)
+                          parseInt(e.target.value, 10)
                         )
                       }
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
