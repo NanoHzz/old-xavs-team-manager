@@ -550,26 +550,42 @@ export default function TeamSelectionPage() {
 
     setSaving(true)
     try {
-      // Create notifications for all players in selection
+      // Create notifications only for players who have a user account
       const players = selectionPlayers
         .map(sp => members.find(m => m.id === sp.member_id))
-        .filter(Boolean)
+        .filter((p): p is NonNullable<typeof p> => !!p && !!p.user_id)
 
-      const notifications = players.map(p => ({
-        user_id: p!.user_id,
-        type: 'team_selection',
-        title: 'Team Selection',
-        body: `You have been selected for ${selectedRound.opposition || 'the upcoming match'}`,
-        read: false,
-      }))
+      if (players.length > 0) {
+        const notifications = players.map(p => ({
+          user_id: p.user_id!,
+          type: 'team_selection',
+          title: 'Team Selection',
+          body: `You have been selected for ${selectedRound.opposition || 'the upcoming match'}`,
+          read: false,
+        }))
 
-      const { error } = await supabase
-        .from('notifications')
-        .insert(notifications)
+        // Insert one at a time so a single failure doesn't block all
+        let sent = 0
+        for (const notif of notifications) {
+          const { error } = await supabase
+            .from('notifications')
+            .insert(notif)
+          if (error) {
+            console.error('Notification insert failed:', error, notif)
+          } else {
+            sent++
+          }
+        }
 
-      if (error) throw error
-
-      alert('Team selection finalized and notifications sent!')
+        const skipped = selectionPlayers.length - players.length
+        const msg = skipped > 0
+          ? `Team finalized! Notified ${sent} player(s). ${skipped} guest player(s) without accounts were skipped.`
+          : `Team finalized! Notified ${sent} player(s).`
+        alert(msg)
+      } else {
+        // No players have user accounts — still mark as finalized
+        alert('Team finalized! No players have linked accounts yet, so no notifications were sent.')
+      }
     } catch (err) {
       console.error('Error finalizing:', err)
       setError('Failed to finalize selection')
