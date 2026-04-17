@@ -133,20 +133,54 @@ export default function JoinTeamPage() {
     setJoining(true)
 
     try {
-      // Create member record
-      const { data: memberData, error: memberError } = await supabase
-        .from('members')
-        .insert({
-          team_id: inviteInfo.teamId,
-          user_id: user.id,
-          role: 'player',
-          status: 'active',
-          display_name: user.user_metadata?.full_name || user.email || null,
-        })
-        .select('id')
-        .single()
+      const userName = user.user_metadata?.full_name || user.email || ''
 
-      if (memberError) throw memberError
+      // Check if there's an unlinked guest member we should claim
+      // Match by display_name or guest_name (case-insensitive)
+      const { data: guestMembers } = await supabase
+        .from('members')
+        .select('id, display_name, guest_name')
+        .eq('team_id', inviteInfo.teamId)
+        .is('user_id', null)
+        .eq('status', 'active')
+
+      // Try to find a guest record matching this user's name
+      const matchingGuest = guestMembers?.find(g => {
+        const gName = (g.display_name || g.guest_name || '').toLowerCase().trim()
+        return gName === userName.toLowerCase().trim() && gName.length > 0
+      })
+
+      let memberId: string
+
+      if (matchingGuest) {
+        // Link existing guest member to this auth user
+        const { error: linkError } = await supabase
+          .from('members')
+          .update({
+            user_id: user.id,
+            display_name: userName || matchingGuest.display_name,
+          })
+          .eq('id', matchingGuest.id)
+
+        if (linkError) throw linkError
+        memberId = matchingGuest.id
+      } else {
+        // No matching guest — create a new member record
+        const { data: memberData, error: memberError } = await supabase
+          .from('members')
+          .insert({
+            team_id: inviteInfo.teamId,
+            user_id: user.id,
+            role: 'player',
+            status: 'active',
+            display_name: userName || null,
+          })
+          .select('id')
+          .single()
+
+        if (memberError) throw memberError
+        memberId = memberData.id
+      }
 
       // Increment use_count
       const { error: updateError } = await supabase
@@ -160,7 +194,7 @@ export default function JoinTeamPage() {
       await refreshTeams()
 
       // Save member ID for position selection
-      setNewMemberId(memberData.id)
+      setNewMemberId(memberId)
 
       // Go to position selection step
       setPageState('position_select')

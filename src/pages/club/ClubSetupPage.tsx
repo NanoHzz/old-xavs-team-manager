@@ -38,6 +38,7 @@ export default function ClubSetupPage() {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
   const [inviteLink, setInviteLink] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
 
   const [clubData, setClubData] = useState<ClubFormData>({
     name: '',
@@ -190,7 +191,38 @@ export default function ClubSetupPage() {
   if (step === 'club') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+        <div className="w-full max-w-md space-y-4">
+          {/* Join existing team option */}
+          <Card>
+            <div className="p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-1">Have an invite code?</h2>
+              <p className="text-gray-600 text-sm mb-4">
+                If your coach sent you a code or link, enter it here to join your team.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="Enter invite code"
+                  value={inviteCode}
+                  onChange={e => setInviteCode(e.target.value.trim().toUpperCase())}
+                />
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    if (inviteCode) navigate(`/join/${inviteCode}`)
+                  }}
+                  disabled={!inviteCode}
+                >
+                  Join
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          <div className="text-center text-white text-sm font-medium">or</div>
+
+          {/* Create new club */}
+          <Card>
           <div className="p-8">
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-gray-900">Set Up Your Club</h2>
@@ -259,7 +291,8 @@ export default function ClubSetupPage() {
               </Button>
             </div>
           </div>
-        </Card>
+          </Card>
+        </div>
       </div>
     )
   }
