@@ -159,16 +159,12 @@ function formatShortName(name: string): string {
   return `${initial}.${surname}`
 }
 
-function isFollowerPosition(positionName?: string, primaryPosition?: string | null): boolean {
-  if (positionName) {
-    const lower = positionName.toLowerCase()
-    if (lower === 'ruck' || lower === 'rk' || lower === 'r') return true
-    if (lower === 'rover' || lower === 'rov') return true
-    if (lower === 'ruck rover' || lower === 'rr') return true
-  }
-  if (primaryPosition) {
-    if (primaryPosition === 'ruck' || primaryPosition === 'ruck_rover' || primaryPosition === 'rover') return true
-  }
+function isFollowerPosition(positionName?: string): boolean {
+  if (!positionName) return false
+  const lower = positionName.toLowerCase()
+  if (lower === 'ruck' || lower === 'rk' || lower === 'r') return true
+  if (lower === 'rover' || lower === 'rov') return true
+  if (lower === 'ruck rover' || lower === 'rr') return true
   return false
 }
 
@@ -182,14 +178,14 @@ export function AflOval({ players, className = '', compact = false }: AflOvalPro
     'rover': 2, 'rov': 2,
   }
   const followerPlayers = onFieldPlayers
-    .filter(p => isFollowerPosition(p.positionName, p.primaryPosition))
+    .filter(p => isFollowerPosition(p.positionName))
     .sort((a, b) => {
       const aOrder = FOLLOWER_ORDER[(a.positionName || '').toLowerCase()] ?? 9
       const bOrder = FOLLOWER_ORDER[(b.positionName || '').toLowerCase()] ?? 9
       return aOrder - bOrder
     })
   const ovalPlayers = onFieldPlayers.filter(p =>
-    !isFollowerPosition(p.positionName, p.primaryPosition)
+    !isFollowerPosition(p.positionName)
   )
 
   const positionedPlayers = useMemo(() => {
